@@ -259,6 +259,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         cwd: project_path,
         stdio: ["ignore", "pipe", "pipe"], // pipe stdout/stderr to log
       });
+      activeProcess.catch((e: any) => {}); // Prevent unhandled rejection
       
       // Stream logs
       activeProcess.stdout?.on("data", (chunk: any) => console.error(`[Flutter]: ${chunk}`));
