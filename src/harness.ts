@@ -14,7 +14,7 @@ class AmbiguousFinderException implements Exception {
   AmbiguousFinderException(this.message, this.matches);
 
   @override
-  String toString() => 'AmbiguousFinderException: \$message\\nMatches: \${jsonEncode(this.matches)}';
+  String toString() => 'AmbiguousFinderException: \$message\nMatches: \${jsonEncode(this.matches)}';
 }
 
 class _FinderResult {
@@ -248,8 +248,7 @@ Future<void> _handleScrollUntilVisible(WidgetTester tester, Map<String, dynamic>
     );
     await tester.pumpAndSettle();
   } catch (e) {
-    // If it failed, check if it was due to ambiguity
-    // We re-evaluate the finder to see what's happening
+    // If it failed, check if it was due to ambiguity or already visible
     final elements = targetFinder.evaluate().toList();
     if (elements.length > 1) {
        final matches = elements.map((e) => _serializeElement(e, summaryOnly: true)).toList();
@@ -257,6 +256,13 @@ Future<void> _handleScrollUntilVisible(WidgetTester tester, Map<String, dynamic>
          'Scroll failed due to ambiguity. Found \${elements.length} matches.',
          matches,
        );
+    } else if (elements.isNotEmpty) {
+       // If found (exactly 1) but scroll failed, it implies it might be outside the scrollable
+       // OR already visible and the error is confusing.
+       // Usually if visible, scrollUntilVisible succeeds.
+       // But if it's a FAB outside the scrollable, scrollUntilVisible might fail to find the scrollable context?
+       // Let's suggest tapping.
+       throw 'Scroll failed, but the widget was found in the tree (and might be already visible or outside the scrollable). Try using "tap" directly. Original error: \$e';
     }
     rethrow;
   }
