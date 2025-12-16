@@ -8,7 +8,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { execa } from "execa";
 import fs from "fs/promises";
 import path from "path";
-import { HARNESS_CODE } from "./harness.js";
+import { getHarnessCode } from "./harness.js";
 
 // --- State ---
 let activeProcess: any | null = null;
@@ -95,6 +95,18 @@ async function startWsServer(): Promise<number> {
       });
     });
   });
+}
+
+// Helper to extract package name from pubspec.yaml
+async function getPackageName(projectPath: string): Promise<string | undefined> {
+    try {
+        const pubspecPath = path.join(projectPath, "pubspec.yaml");
+        const content = await fs.readFile(pubspecPath, "utf-8");
+        const match = content.match(/^name:\s+(\S+)/m);
+        return match ? match[1] : undefined;
+    } catch (e) {
+        return undefined;
+    }
 }
 
 // --- MCP Server Setup ---
@@ -319,8 +331,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // 2. Inject Harness
       const integrationTestDir = path.join(project_path, "integration_test");
       await fs.mkdir(integrationTestDir, { recursive: true });
+      
+      // Try to determine package name from pubspec.yaml
+      const packageName = await getPackageName(project_path);
+      const harnessCode = getHarnessCode(packageName);
+      
       const harnessPath = path.join(integrationTestDir, "mcp_harness.dart");
-      await fs.writeFile(harnessPath, HARNESS_CODE);
+      await fs.writeFile(harnessPath, harnessCode);
       
       // 3. Spawn Flutter Process
       const flutterArgs = [
@@ -364,7 +381,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
       
       return {
-        content: [{ type: "text", text: "App started and connected!" }],
+        content: [{ type: "text", text: `App started and connected! (Injected harness with package: ${packageName ?? 'unknown'})` }],
       };
     }
 

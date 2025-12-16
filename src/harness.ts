@@ -1,16 +1,19 @@
-export const HARNESS_CODE = `
+export const getHarnessCode = (packageName?: string) => `
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:web_socket_channel/io.dart';
+${packageName ? `import 'package:${packageName}/main.dart' as app;` : ''}
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   testWidgets('MCP Pilot Harness', (WidgetTester tester) async {
+    ${packageName ? '// Start the app\n    app.main();' : '// No app.main() call injected'}
+    
     // Wait for the app to settle initially
     await tester.pumpAndSettle();
 
@@ -207,4 +210,4 @@ Map<String, dynamic> _serializeElement(Element element) {
   
   return json;
 }
-`;
+`
