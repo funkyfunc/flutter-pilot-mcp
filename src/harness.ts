@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:web_socket_channel/io.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/semantics.dart';
 ${packageName ? `import 'package:${packageName}/main.dart' as app;` : ''}
 
 class AmbiguousFinderException implements Exception {
@@ -89,6 +91,9 @@ void main() {
           case 'get_widget_tree':
             result = _handleGetWidgetTree(params);
             break;
+          case 'get_accessibility_tree':
+            result = await _handleGetAccessibilityTree(tester);
+            break;
           case 'scroll':
             await _handleScroll(tester, params);
             break;
@@ -102,11 +107,15 @@ void main() {
             throw 'Unknown method: \$method';
         }
         
-        channel.sink.add(jsonEncode({
+        print('MCP: Method \$method completed. Encoding response...');
+        final jsonResponse = jsonEncode({
           'jsonrpc': '2.0',
           'id': id,
           'result': result ?? {'status': 'success'},
-        }));
+        });
+        print('MCP: Response encoded (length: \${jsonResponse.length}). Sending...');
+        channel.sink.add(jsonResponse);
+        print('MCP: Response sent.');
       } catch (e, stack) {
         print('MCP: Error: \$e');
         channel.sink.add(jsonEncode({
@@ -216,6 +225,28 @@ Future<void> _handleEnterText(WidgetTester tester, Map<String, dynamic> params) 
   final text = params['text'] as String;
   await tester.enterText(result.finder, text);
   await tester.pumpAndSettle();
+
+  if (params.containsKey('action')) {
+    final actionStr = params['action'] as String;
+    TextInputAction action;
+    switch (actionStr) {
+      case 'done': action = TextInputAction.done; break;
+      case 'search': action = TextInputAction.search; break;
+      case 'next': action = TextInputAction.next; break;
+      case 'go': action = TextInputAction.go; break;
+      case 'send': action = TextInputAction.send; break;
+      case 'previous': action = TextInputAction.previous; break;
+      case 'continueAction': action = TextInputAction.continueAction; break;
+      case 'join': action = TextInputAction.join; break;
+      case 'route': action = TextInputAction.route; break;
+      case 'emergencyCall': action = TextInputAction.emergencyCall; break;
+      case 'newline': action = TextInputAction.newline; break;
+      case 'none': action = TextInputAction.none; break;
+      default: action = TextInputAction.done;
+    }
+    await tester.testTextInput.receiveAction(action);
+    await tester.pumpAndSettle();
+  }
 }
 
 Future<void> _handleScroll(WidgetTester tester, Map<String, dynamic> params) async {
@@ -280,6 +311,120 @@ Future<void> _handleWaitFor(WidgetTester tester, Map<String, dynamic> params) as
     await tester.pump(const Duration(milliseconds: 100));
   }
   throw 'Timeout waiting for widget';
+}
+
+Future<Map<String, dynamic>> _handleGetAccessibilityTree(WidgetTester tester) async {
+  print('MCP: _handleGetAccessibilityTree started');
+  final binding = tester.binding;
+  // Ensure semantics are enabled
+  binding.pipelineOwner.ensureSemantics();
+  print('MCP: ensureSemantics called');
+  
+  // Wait for the semantics tree to be generated
+  await tester.pumpAndSettle();
+  print('MCP: pumpAndSettle done');
+  
+  final semanticsOwner = binding.pipelineOwner.semanticsOwner;
+  if (semanticsOwner == null) return {'error': 'SemanticsOwner is null'};
+  
+  final root = semanticsOwner.rootSemanticsNode;
+  if (root == null) return {'error': 'No root semantics node'};
+  
+  print('MCP: Serializing root node');
+  final result = _serializeSemanticsNode(root);
+  print('MCP: Serialization complete');
+  return result;
+}
+
+Map<String, dynamic> _serializeSemanticsNode(SemanticsNode node) {
+  // print('MCP: Serializing node \${node.id}');
+  final json = <String, dynamic>{
+    'id': node.id,
+    'rect': {
+      'left': node.rect.left,
+      'top': node.rect.top,
+      'width': node.rect.width,
+      'height': node.rect.height,
+    },
+    'transform': node.transform?.toString(),
+  };
+
+  final data = node.getSemanticsData();
+  
+  if (data.label.isNotEmpty) json['label'] = data.label;
+  if (data.value.isNotEmpty) json['value'] = data.value;
+  if (data.increasedValue.isNotEmpty) json['increasedValue'] = data.increasedValue;
+  if (data.decreasedValue.isNotEmpty) json['decreasedValue'] = data.decreasedValue;
+  if (data.hint.isNotEmpty) json['hint'] = data.hint;
+  if (data.tooltip.isNotEmpty) json['tooltip'] = data.tooltip;
+  if (data.textDirection != null) json['textDirection'] = data.textDirection.toString();
+
+  // Flags
+  final flags = <String>[];
+  if (data.hasFlag(SemanticsFlag.hasCheckedState)) flags.add('hasCheckedState');
+  if (data.hasFlag(SemanticsFlag.isChecked)) flags.add('isChecked');
+  if (data.hasFlag(SemanticsFlag.isSelected)) flags.add('isSelected');
+  if (data.hasFlag(SemanticsFlag.isButton)) flags.add('isButton');
+  if (data.hasFlag(SemanticsFlag.isTextField)) flags.add('isTextField');
+  if (data.hasFlag(SemanticsFlag.isReadOnly)) flags.add('isReadOnly');
+  if (data.hasFlag(SemanticsFlag.isLink)) flags.add('isLink');
+  if (data.hasFlag(SemanticsFlag.isHeader)) flags.add('isHeader');
+  if (data.hasFlag(SemanticsFlag.isSlider)) flags.add('isSlider');
+  if (data.hasFlag(SemanticsFlag.isLiveRegion)) flags.add('isLiveRegion');
+  if (data.hasFlag(SemanticsFlag.isHidden)) flags.add('isHidden');
+  if (data.hasFlag(SemanticsFlag.isImage)) flags.add('isImage');
+  if (data.hasFlag(SemanticsFlag.isInMutuallyExclusiveGroup)) flags.add('isInMutuallyExclusiveGroup');
+  if (data.hasFlag(SemanticsFlag.scopesRoute)) flags.add('scopesRoute');
+  if (data.hasFlag(SemanticsFlag.namesRoute)) flags.add('namesRoute');
+  if (data.hasFlag(SemanticsFlag.isHidden)) flags.add('isHidden');
+  if (data.hasFlag(SemanticsFlag.isObscured)) flags.add('isObscured');
+  if (data.hasFlag(SemanticsFlag.isMultiline)) flags.add('isMultiline');
+  if (data.hasFlag(SemanticsFlag.isFocusable)) flags.add('isFocusable');
+  if (data.hasFlag(SemanticsFlag.isFocused)) flags.add('isFocused');
+  if (data.hasFlag(SemanticsFlag.isEnabled)) flags.add('isEnabled');
+  // if (data.hasFlag(SemanticsFlag.isInMutuallyExclusiveGroup)) flags.add('isInMutuallyExclusiveGroup'); // Already checked above
+  
+  if (flags.isNotEmpty) json['flags'] = flags;
+
+  // Actions
+  final actions = <String>[];
+  
+  if (data.hasAction(SemanticsAction.tap)) actions.add('tap');
+  if (data.hasAction(SemanticsAction.longPress)) actions.add('longPress');
+  if (data.hasAction(SemanticsAction.scrollLeft)) actions.add('scrollLeft');
+  if (data.hasAction(SemanticsAction.scrollRight)) actions.add('scrollRight');
+  if (data.hasAction(SemanticsAction.scrollUp)) actions.add('scrollUp');
+  if (data.hasAction(SemanticsAction.scrollDown)) actions.add('scrollDown');
+  if (data.hasAction(SemanticsAction.increase)) actions.add('increase');
+  if (data.hasAction(SemanticsAction.decrease)) actions.add('decrease');
+  if (data.hasAction(SemanticsAction.showOnScreen)) actions.add('showOnScreen');
+  if (data.hasAction(SemanticsAction.moveCursorForwardByCharacter)) actions.add('moveCursorForwardByCharacter');
+  if (data.hasAction(SemanticsAction.moveCursorBackwardByCharacter)) actions.add('moveCursorBackwardByCharacter');
+  if (data.hasAction(SemanticsAction.setSelection)) actions.add('setSelection');
+  if (data.hasAction(SemanticsAction.copy)) actions.add('copy');
+  if (data.hasAction(SemanticsAction.cut)) actions.add('cut');
+  if (data.hasAction(SemanticsAction.paste)) actions.add('paste');
+  if (data.hasAction(SemanticsAction.didGainAccessibilityFocus)) actions.add('didGainAccessibilityFocus');
+  if (data.hasAction(SemanticsAction.didLoseAccessibilityFocus)) actions.add('didLoseAccessibilityFocus');
+  if (data.hasAction(SemanticsAction.customAction)) actions.add('customAction');
+  if (data.hasAction(SemanticsAction.dismiss)) actions.add('dismiss');
+  if (data.hasAction(SemanticsAction.moveCursorForwardByWord)) actions.add('moveCursorForwardByWord');
+  if (data.hasAction(SemanticsAction.moveCursorBackwardByWord)) actions.add('moveCursorBackwardByWord');
+  if (data.hasAction(SemanticsAction.setText)) actions.add('setText');
+
+  if (actions.isNotEmpty) json['actions'] = actions;
+
+  // Recursion
+  if (node.hasChildren) {
+    final children = <Map<String, dynamic>>[];
+    node.visitChildren((child) {
+      children.add(_serializeSemanticsNode(child));
+      return true; 
+    });
+    json['children'] = children;
+  }
+
+  return json;
 }
 
 Map<String, dynamic> _handleGetWidgetTree(Map<String, dynamic> params) {

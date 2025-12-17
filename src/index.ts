@@ -75,10 +75,13 @@ async function startWsServer(): Promise<number> {
       
       ws.on("message", (data) => {
         try {
-          const msg = JSON.parse(data.toString());
+          const strData = data.toString();
+          console.error(`[Server] WS Message received: \${strData.substring(0, 200)}...`);
+          const msg = JSON.parse(strData);
           
           // Handle responses
           if (msg.id && pendingRequests.has(msg.id)) {
+            console.error(`[Server] Resolving request \${msg.id}`);
             const { resolve, reject } = pendingRequests.get(msg.id)!;
             pendingRequests.delete(msg.id);
             if (msg.error) {
@@ -215,6 +218,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             text: { type: "string", description: "Text to enter" },
+            action: { 
+                type: "string", 
+                description: "Optional TextInputAction to perform after entering text (e.g. 'done', 'search', 'next', 'go', 'send')." 
+            },
             finderType: {
               type: "string",
               enum: ["byKey", "byText", "byTooltip", "byType"],
@@ -298,6 +305,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             summaryOnly: { type: "boolean", description: "If true, returns a filtered tree hiding layout clutter (Container, Padding, etc.)" }
           },
+        },
+      },
+      {
+        name: "get_accessibility_tree",
+        description: "Returns the accessibility (semantics) tree.",
+        inputSchema: {
+          type: "object",
+          properties: {},
         },
       },
       {
@@ -523,14 +538,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Parse JSON events from flutter run --machine
           const lines = str.split("\n");
           for (const line of lines) {
-              if (!line.trim().startsWith("[") && line.trim().startsWith("{")) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
                   try {
-                      const event = JSON.parse(line);
-                      if (event.event === "app.debugPort") {
-                         if (event.params && event.params.wsUri) {
-                             currentObservatoryUri = event.params.wsUri;
-                             console.error(`Captured Observatory URI: ${currentObservatoryUri}`);
-                         }
+                      let events = JSON.parse(line);
+                      if (!Array.isArray(events)) {
+                          events = [events];
+                      }
+                      
+                      for (const event of events) {
+                          if (event.event === "app.debugPort") {
+                             if (event.params && event.params.wsUri) {
+                                 currentObservatoryUri = event.params.wsUri;
+                                 console.error(`Captured Observatory URI: ${currentObservatoryUri}`);
+                             }
+                          }
+                          if (event.event === "app.started") {
+                              if (event.params && event.params.appId) {
+                                  currentAppId = event.params.appId;
+                                  console.error(`Captured App ID: ${currentAppId}`);
+                              }
+                          }
                       }
                   } catch (e) {
                       // ignore parse errors for non-json lines
@@ -689,6 +717,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     
     if (name === "get_widget_tree") {
         const result = await sendRpc("get_widget_tree", args);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    }
+
+    if (name === "get_accessibility_tree") {
+        const result = await sendRpc("get_accessibility_tree", args);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }
 
