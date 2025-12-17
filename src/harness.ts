@@ -212,6 +212,12 @@ Finder _createLazyFinder(Map<String, dynamic> params) {
 
 Future<void> _handleTap(WidgetTester tester, Map<String, dynamic> params) async {
   final result = _createFinder(params);
+  try {
+    await tester.ensureVisible(result.finder);
+    await tester.pumpAndSettle();
+  } catch (e) {
+    // Ignore ensureVisible errors (e.g. widget not in a scrollable), proceed to tap
+  }
   await tester.tap(result.finder, warnIfMissed: false);
   await tester.pumpAndSettle();
 }

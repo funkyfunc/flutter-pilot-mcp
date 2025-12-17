@@ -161,7 +161,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "hot_restart",
-        description: "Performs a hot restart of the running app (reloads code and resets state).",
+        description: "Performs a hot restart of the currently running app session started by this server.",
         inputSchema: {
           type: "object",
           properties: {},
