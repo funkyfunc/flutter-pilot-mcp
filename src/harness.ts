@@ -318,18 +318,26 @@ Future<void> _handleWaitFor(WidgetTester tester, Map<String, dynamic> params) as
 Future<Map<String, dynamic>> _handleGetAccessibilityTree(WidgetTester tester) async {
   final binding = tester.binding;
   // Ensure semantics are enabled
-  binding.pipelineOwner.ensureSemantics();
+  final semanticsHandle = binding.pipelineOwner.ensureSemantics(); // Capture handle
   
   // Wait for the semantics tree to be generated
   await tester.pumpAndSettle();
   
   final semanticsOwner = binding.pipelineOwner.semanticsOwner;
-  if (semanticsOwner == null) return {'error': 'SemanticsOwner is null'};
+  if (semanticsOwner == null) {
+    semanticsHandle.dispose(); // Dispose on error
+    return {'error': 'SemanticsOwner is null'};
+  }
   
   final root = semanticsOwner.rootSemanticsNode;
-  if (root == null) return {'error': 'No root semantics node'};
+  if (root == null) {
+    semanticsHandle.dispose(); // Dispose on error
+    return {'error': 'No root semantics node'};
+  }
   
-  return _serializeSemanticsNode(root);
+  final result = _serializeSemanticsNode(root);
+  semanticsHandle.dispose(); // Dispose after use
+  return result;
 }
 
 Map<String, dynamic> _serializeSemanticsNode(SemanticsNode node) {
