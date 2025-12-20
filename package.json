@@ -11,7 +11,8 @@
     "verify": "node dist/verification/verify.js",
     "verify-validate": "node dist/verification/verify_validate.js",
     "verify-tools": "node dist/verification/verify_tools.js",
-    "verify-scroll": "node dist/verification/verify_scroll.js"
+    "verify-scroll": "node dist/verification/verify_scroll.js",
+    "verify-screenshot": "node dist/verification/verify_screenshot.js"
   },
   "keywords": [],
   "dependencies": {
