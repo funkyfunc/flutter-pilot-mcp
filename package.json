@@ -1,7 +1,13 @@
 {
   "name": "flutter-pilot-mcp",
   "version": "1.0.0",
-  "description": "",
+  "description": "An MCP server that lets AI agents drive Flutter apps — tap, type, scroll, assert, and screenshot live UIs via integration_test.",
+  "author": "funkyfunc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/funkyfunc/flutter-pilot-mcp.git"
+  },
   "type": "module",
   "main": "dist/src/index.js",
   "scripts": {
@@ -16,7 +22,7 @@
     "verify-scroll": "node dist/verification/verify_scroll.js",
     "verify-screenshot": "node dist/verification/verify_screenshot.js"
   },
-  "keywords": [],
+  "keywords": ["mcp", "flutter", "testing", "ai", "llm", "integration-test", "model-context-protocol"],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.0",
     "execa": "^9.6.1",
