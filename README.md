@@ -137,7 +137,7 @@ Once your MCP client is connected, ask the agent to:
 | Tool | Description |
 |---|---|
 | `get_widget_tree` | Returns the full widget tree as JSON. Use `summaryOnly: true` to filter layout noise. |
-| `get_accessibility_tree` | Returns the Semantics tree — compact, labels-focused, ideal for LLMs. |
+| `get_accessibility_tree` | Returns the Semantics tree — compact, labels-focused, ideal for LLMs. Pass `includeRect: true` if coordinates are needed. |
 | `explore_screen` | Maps all interactive elements on the current screen using the native Semantics tree. |
 | `take_screenshot` | Captures a PNG screenshot. `type: "app"` (recommended) renders via Flutter; `"device"` uses native capture. |
 
@@ -170,15 +170,18 @@ Once your MCP client is connected, ask the agent to:
 
 ## 🤝 Using with the Official Dart/Flutter MCP Server
 
-Flutter Test Pilot is **complementary** to the [official Dart/Flutter MCP server](https://github.com/dart-lang/ai). They serve different purposes:
+Flutter Test Pilot is **complementary** to the [official Dart/Flutter MCP server](https://github.com/dart-lang/ai). While there is some overlap in app interaction (like widget tree inspection), they serve distinct roles in a developer's workflow:
 
-| | Official Dart MCP | Flutter Test Pilot |
+| Feature | Official Dart MCP | Flutter Test Pilot |
 |---|---|---|
-| **Focus** | IDE tooling & code analysis | Interactive UI driving & testing |
-| **Key tools** | `dart_fix`, `analyze_files`, `run_tests`, `pub` | `tap`, `explore_screen`, `assert_*`, `take_screenshot` |
-| **Connection** | Dart Tooling Daemon (DTD) | WebSocket to injected harness |
+| **Primary Focus** | IDE productivity, code analysis & linting | **Live AI-Driven E2E Testing** |
+| **Connectivity** | Dart Tooling Daemon (DTD) | WebSocket to **Injected Harness** |
+| **App Control** | Hot reload/restart, workspace symbols | Mocking, backgrounding, network interception |
+| **AI Discovery** | Widget Tree (standard) | **Semantics-first** (`explore_screen`) |
+| **Assertions** | Manual tree inspection by agent | **On-device** assertions (`assert_exists`, etc.) |
+| **Key Tools** | `dart_fix`, `analyze_files`, `run_tests`, `pub` | `tap`, `explore_screen`, `assert_*`, `intercept_network` |
 
-**Use both together:** the official server for code analysis and package management, and Flutter Test Pilot for end-to-end UI verification.
+**Use both together:** the official server for deep code analysis, package management, and standard IDE features; use Flutter Test Pilot when you need the agent to **live-test** the app UI, simulate complex environment states, and verify behavior with high-level assertions.
 
 ---
 

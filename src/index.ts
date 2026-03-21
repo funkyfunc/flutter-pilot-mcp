@@ -324,7 +324,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Returns the accessibility (semantics) tree.",
         inputSchema: {
           type: "object",
-          properties: {},
+          properties: {
+             includeRect: { type: "boolean", description: "If true, includes token-heavy coordinate and transform data for every node. Default is false." }
+          },
         },
       },
       {
@@ -693,7 +695,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       console.error("Waiting for app to connect...");
       await new Promise<void>((resolve, reject) => {
         appStartedResolver = resolve;
-        setTimeout(() => reject(new Error("Timeout waiting for app to start")), 60000); // 60s timeout for build/launch
+        setTimeout(() => reject(new Error("Timeout waiting for app to start")), 180000); // 180s timeout for build/launch
       });
       
       return {

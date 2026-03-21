@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -25,17 +26,133 @@ class _McpHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     final client = super.createHttpClient(context);
-    
-    // Attempting to mock network is complex as HttpClient wrapper requires implementing many methods.
-    // For MVP AI-Readiness, we'll implement a basic interceptor if exact matches are found, 
-    // otherwise fallback to real network.
-    // Note: fully mocking HttpClient is out of scope for a single file snippet, 
-    // so we'll log it for now or rely on specific project injection.
-    // To keep the harness compiling and functional without a massive HTTP mock class, 
-    // we just register the override.
-    
-    return client;
+    return _McpHttpClient(client, this);
   }
+}
+
+class _McpHttpClient implements HttpClient {
+  final HttpClient _delegate;
+  final _McpHttpOverrides _overrides;
+  _McpHttpClient(this._delegate, this._overrides);
+
+  @override bool get autoUncompress => _delegate.autoUncompress;
+  @override set autoUncompress(bool value) => _delegate.autoUncompress = value;
+  @override Duration? get connectionTimeout => _delegate.connectionTimeout;
+  @override set connectionTimeout(Duration? value) => _delegate.connectionTimeout = value;
+  @override Duration get idleTimeout => _delegate.idleTimeout;
+  @override set idleTimeout(Duration value) => _delegate.idleTimeout = value;
+  @override int? get maxConnectionsPerHost => _delegate.maxConnectionsPerHost;
+  @override set maxConnectionsPerHost(int? value) => _delegate.maxConnectionsPerHost = value;
+  @override String? get userAgent => _delegate.userAgent;
+  @override set userAgent(String? value) => _delegate.userAgent = value;
+
+  @override void addCredentials(Uri url, String realm, HttpClientCredentials credentials) => _delegate.addCredentials(url, realm, credentials);
+  @override void addProxyCredentials(String host, int port, String realm, HttpClientCredentials credentials) => _delegate.addProxyCredentials(host, port, realm, credentials);
+  @override set authenticate(Future<bool> Function(Uri url, String scheme, String? realm)? f) => _delegate.authenticate = f;
+  @override set authenticateProxy(Future<bool> Function(String host, int port, String scheme, String? realm)? f) => _delegate.authenticateProxy = f;
+  @override set badCertificateCallback(bool Function(X509Certificate cert, String host, int port)? callback) => _delegate.badCertificateCallback = callback;
+  @override void close({bool force = false}) => _delegate.close(force: force);
+  @override set connectionFactory(Future<ConnectionTask<Socket>> Function(Uri url, String? proxyHost, int? proxyPort)? f) => _delegate.connectionFactory = f;
+  @override set findProxy(String Function(Uri url)? f) => _delegate.findProxy = f;
+  @override set keyLog(Function(String line)? callback) => _delegate.keyLog = callback;
+
+  Future<HttpClientRequest> _handleRequest(String method, Uri url) async {
+    final urlString = url.toString();
+    for (final pattern in _overrides._mocks.keys) {
+      if (urlString.contains(pattern)) {
+        return _MockHttpClientRequest(url, method, _overrides._mocks[pattern]!);
+      }
+    }
+    return _delegate.openUrl(method, url);
+  }
+
+  @override Future<HttpClientRequest> delete(String host, int port, String path) => _handleRequest('DELETE', Uri(scheme: 'http', host: host, port: port, path: path));
+  @override Future<HttpClientRequest> deleteUrl(Uri url) => _handleRequest('DELETE', url);
+  @override Future<HttpClientRequest> get(String host, int port, String path) => _handleRequest('GET', Uri(scheme: 'http', host: host, port: port, path: path));
+  @override Future<HttpClientRequest> getUrl(Uri url) => _handleRequest('GET', url);
+  @override Future<HttpClientRequest> head(String host, int port, String path) => _handleRequest('HEAD', Uri(scheme: 'http', host: host, port: port, path: path));
+  @override Future<HttpClientRequest> headUrl(Uri url) => _handleRequest('HEAD', url);
+  @override Future<HttpClientRequest> open(String method, String host, int port, String path) => _handleRequest(method, Uri(scheme: 'http', host: host, port: port, path: path));
+  @override Future<HttpClientRequest> openUrl(String method, Uri url) => _handleRequest(method, url);
+  @override Future<HttpClientRequest> patch(String host, int port, String path) => _handleRequest('PATCH', Uri(scheme: 'http', host: host, port: port, path: path));
+  @override Future<HttpClientRequest> patchUrl(Uri url) => _handleRequest('PATCH', url);
+  @override Future<HttpClientRequest> post(String host, int port, String path) => _handleRequest('POST', Uri(scheme: 'http', host: host, port: port, path: path));
+  @override Future<HttpClientRequest> postUrl(Uri url) => _handleRequest('POST', url);
+  @override Future<HttpClientRequest> put(String host, int port, String path) => _handleRequest('PUT', Uri(scheme: 'http', host: host, port: port, path: path));
+  @override Future<HttpClientRequest> putUrl(Uri url) => _handleRequest('PUT', url);
+}
+
+class _MockHttpClientRequest implements HttpClientRequest {
+  @override final Uri uri;
+  @override final String method;
+  final String _responseBody;
+  _MockHttpClientRequest(this.uri, this.method, this._responseBody);
+
+  @override bool bufferOutput = true;
+  @override int contentLength = -1;
+  @override bool followRedirects = true;
+  @override int maxRedirects = 5;
+  @override bool persistentConnection = true;
+  @override HttpHeaders get headers => _MockHttpHeaders();
+  @override HttpConnectionInfo? get connectionInfo => null;
+  @override List<Cookie> get cookies => [];
+  @override Encoding encoding = utf8;
+
+  @override Future<HttpClientResponse> get done => Future.value(_MockHttpClientResponse(_responseBody));
+  @override Future<HttpClientResponse> close() => Future.value(_MockHttpClientResponse(_responseBody));
+  @override void add(List<int> data) {}
+  @override void addError(Object error, [StackTrace? stackTrace]) {}
+  @override Future addStream(Stream<List<int>> stream) => stream.drain();
+  @override Future flush() => Future.value();
+  @override void write(Object? obj) {}
+  @override void writeAll(Iterable objects, [String separator = ""]) {}
+  @override void writeCharCode(int charCode) {}
+  @override void writeln([Object? obj = ""]) {}
+  @override void abort([Object? exception, StackTrace? stackTrace]) {}
+}
+
+class _MockHttpClientResponse extends Stream<List<int>> implements HttpClientResponse {
+  final String _body;
+  _MockHttpClientResponse(this._body);
+
+  @override int get statusCode => 200;
+  @override int get contentLength => utf8.encode(_body).length;
+  @override HttpHeaders get headers => _MockHttpHeaders();
+  @override StreamSubscription<List<int>> listen(void Function(List<int> event)? onData, {Function? onError, void Function()? onDone, bool? cancelOnError}) {
+    return Stream.value(utf8.encode(_body)).listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }
+  @override X509Certificate? get certificate => null;
+  @override HttpConnectionInfo? get connectionInfo => null;
+  @override List<Cookie> get cookies => [];
+  @override Future<Socket> detachSocket() => throw UnsupportedError('detachSocket');
+  @override bool get isRedirect => false;
+  @override bool get persistentConnection => true;
+  @override String get reasonPhrase => 'OK';
+  @override List<RedirectInfo> get redirects => [];
+  @override HttpClientResponseCompressionState get compressionState => HttpClientResponseCompressionState.notCompressed;
+  @override Future<HttpClientResponse> redirect([String? method, Uri? url, bool? followLoops]) => Future.value(this);
+}
+
+class _MockHttpHeaders implements HttpHeaders {
+  final Map<String, List<String>> _headers = {'content-type': ['application/json; charset=utf-8']};
+  @override bool chunkedTransferEncoding = false;
+  @override int contentLength = -1;
+  @override ContentType? contentType = ContentType.json;
+  @override DateTime? date = DateTime.now();
+  @override DateTime? expires;
+  @override String? host = 'mock';
+  @override DateTime? ifModifiedSince;
+  @override int? port = 80;
+  @override bool persistentConnection = true;
+  @override void add(String name, Object value, {bool preserveHeaderCase = false}) {}
+  @override void clear() {}
+  @override void forEach(void Function(String name, List<String> values) action) => _headers.forEach(action);
+  @override void noFolding(String name) {}
+  @override void remove(String name, Object value) {}
+  @override void removeAll(String name) {}
+  @override void set(String name, Object value, {bool preserveHeaderCase = false}) {}
+  @override List<String>? operator [](String name) => _headers[name.toLowerCase()];
+  @override String? value(String name) => _headers[name.toLowerCase()]?.first;
 }
 
 final _mcpHttpOverrides = _McpHttpOverrides();
@@ -125,7 +242,7 @@ void main() {
             result = _handleGetWidgetTree(params);
             break;
           case 'get_accessibility_tree':
-            result = await _handleGetAccessibilityTree(tester);
+            result = await _handleGetAccessibilityTree(tester, params);
             break;
           case 'scroll':
             await _handleScroll(tester, params);
@@ -602,7 +719,7 @@ void _collectInteractiveSemantics(SemanticsNode node, List<Map<String, dynamic>>
   }
 }
 
-Future<Map<String, dynamic>> _handleGetAccessibilityTree(WidgetTester tester) async {
+Future<Map<String, dynamic>> _handleGetAccessibilityTree(WidgetTester tester, Map<String, dynamic> params) async {
   final binding = tester.binding;
   // Ensure semantics are enabled
   final semanticsHandle = binding.pipelineOwner.ensureSemantics(); // Capture handle
@@ -622,23 +739,29 @@ Future<Map<String, dynamic>> _handleGetAccessibilityTree(WidgetTester tester) as
     return {'error': 'No root semantics node'};
   }
   
-  final result = _serializeSemanticsNode(root);
+  final includeRect = params['includeRect'] == true;
+  final result = _serializeSemanticsNode(root, includeRect: includeRect);
   semanticsHandle.dispose(); // Dispose after use
   return result;
 }
 
-Map<String, dynamic> _serializeSemanticsNode(SemanticsNode node) {
+Map<String, dynamic> _serializeSemanticsNode(SemanticsNode node, {required bool includeRect}) {
   // print('MCP: Serializing node ${node.id}');
   final json = <String, dynamic>{
     'id': node.id,
-    'rect': {
+  };
+
+  if (includeRect) {
+    json['rect'] = {
       'left': node.rect.left,
       'top': node.rect.top,
       'width': node.rect.width,
       'height': node.rect.height,
-    },
-    'transform': node.transform?.toString(),
-  };
+    };
+    if (node.transform != null) {
+      json['transform'] = node.transform!.toString();
+    }
+  }
 
   final data = node.getSemanticsData();
   
@@ -709,7 +832,7 @@ Map<String, dynamic> _serializeSemanticsNode(SemanticsNode node) {
   if (node.hasChildren) {
     final children = <Map<String, dynamic>>[];
     node.visitChildren((child) {
-      children.add(_serializeSemanticsNode(child));
+      children.add(_serializeSemanticsNode(child, includeRect: includeRect));
       return true; 
     });
     json['children'] = children;
@@ -739,7 +862,7 @@ Map<String, dynamic> _serializeElement(Element element, {required bool summaryOn
   });
 
   final widget = element.widget;
-  final type = widget.runtimeType.toString();
+  final type = widget.runtimeType.toString().replaceAll(RegExp(r'<[^>]*>'), '');
   
   final json = <String, dynamic>{
     'type': type,

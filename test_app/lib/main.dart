@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -29,6 +31,19 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isChecked = false;
   final TextEditingController _controller = TextEditingController();
+  String _networkResult = '';
+
+  Future<void> _fetchData() async {
+    try {
+      final client = HttpClient();
+      final request = await client.getUrl(Uri.parse('https://example.com/api/data'));
+      final response = await request.close();
+      final stringData = await response.transform(utf8.decoder).join();
+      setState(() => _networkResult = stringData);
+    } catch (e) {
+      setState(() => _networkResult = 'Error: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +72,12 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () => Navigator.pushNamed(context, '/details'),
               child: const Text('Go to Details'),
             ),
+            ElevatedButton(
+              key: const Key('fetch_button'),
+              onPressed: _fetchData,
+              child: const Text('Fetch Data'),
+            ),
+            Text(_networkResult, key: const Key('network_result')),
           ],
         ),
       ),
