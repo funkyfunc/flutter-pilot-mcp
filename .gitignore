@@ -14,3 +14,6 @@ test_app/integration_test/mcp_harness.dart
 .idea
 .vscode
 *.swp
+
+# Invisible files
+.invisible
