@@ -10,5 +10,7 @@ export default defineConfig({
 	shims: true,
 	dts: false,
 	sourcemap: false,
-	onSuccess: "cp src/harness.dart dist/",
+	loader: {
+		".dart": "text",
+	},
 });
