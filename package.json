@@ -18,7 +18,7 @@
 		"lint:fix": "biome check --write .",
 		"format": "biome format . --write",
 		"typecheck": "tsc --noEmit",
-		"validate": "npm run lint:fix && npm run typecheck && npm run format && npm run build",
+		"validate": "npm run lint:fix && npm run typecheck && npm run format && npm run build && npm run verify-harness",
 		"verify-harness": "tsx verification/verify_harness_syntax.ts",
 		"verify-tools": "tsx verification/verify_tools.ts",
 		"verify-integration": "tsx verification/verify_integration.ts",

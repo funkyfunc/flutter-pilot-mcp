@@ -2,15 +2,19 @@ import { execa } from "execa";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
-import { getHarnessCode } from "../src/harness.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main(): Promise<void> {
 	console.log("[Verify] Starting Dart Harness Syntax Verification...");
 
-	const dartCode = getHarnessCode("test_app");
-	const testAppPath = path.resolve(__dirname, "../../test_app");
+	// Read the harness source directly — same file that gets inlined at build time
+	const harnessSourcePath = path.resolve(__dirname, "../src/harness.dart");
+	const dartCode = (await fs.readFile(harnessSourcePath, "utf-8"))
+		.replace("// INJECT_IMPORT", "import 'package:test_app/main.dart' as app;")
+		.replace("// INJECT_MAIN", "app.main();");
+
+	const testAppPath = path.resolve(__dirname, "../test_app");
 	const integrationTestDir = path.join(testAppPath, "integration_test");
 	const harnessFilePath = path.join(integrationTestDir, "mcp_harness.dart");
 
