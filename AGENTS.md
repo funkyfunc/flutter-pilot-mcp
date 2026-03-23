@@ -4,6 +4,9 @@ Welcome! If you are an AI agent (or a human new to the codebase) looking to cont
 
 ## 🏗️ Architecture Deep Dive
 
+> [!CAUTION]
+> **NEVER** commit or push any files within the `./invisible/` directory to the remote repository. This folder is reserved for local-only scratchpads, personal notes, and internal context that should not be shared publicly.
+
 The system is fundamentally composed of two halves communicating over a local WebSocket:
 
 1. **The Node.js MCP Server (`src/index.ts`)**
