@@ -23,12 +23,12 @@ Flutter Test Pilot bridges your LLM (Claude, Gemini, etc.) to a running Flutter 
 | Category | Tools |
 |---|---|
 | **Lifecycle** | `start_app` · `stop_app` · `pilot_hot_restart` · `list_devices` |
-| **Interaction** | `tap` · `long_press` · `double_tap` · `enter_text` · `scroll` · `swipe` · `scroll_until_visible` · `wait_for` · `wait_for_gone` · `press_key` |
-| **Inspection** | `get_widget_tree` · `get_accessibility_tree` · `explore_screen` · `take_screenshot` · `screenshot_element` |
+| **Interaction** | `tap` · `long_press` · `double_tap` · `enter_text` · `scroll` · `swipe` · `drag_and_drop` · `scroll_until_visible` · `wait_for` · `wait_for_gone` · `press_key` |
+| **Inspection** | `get_widget_tree` · `get_accessibility_tree` · `explore_screen` · `get_text` · `take_screenshot` · `screenshot_element` |
 | **Assertions** | `assert_exists` · `assert_not_exists` · `assert_text_equals` · `assert_state` |
 | **Navigation** | `navigate_to` · `go_back` · `get_current_route` |
 | **Environment** | `simulate_background` · `set_network_status` · `intercept_network` |
-| **Utilities** | `validate_project` · `read_logs` |
+| **Utilities** | `validate_project` · `read_logs` · `wipe_app_data` |
 
 ### Unified Selectors
 
@@ -145,6 +145,7 @@ Once your MCP client is connected, ask the agent to:
 | `enter_text` | Enters text into a `TextField`. Optionally sends a `TextInputAction` (e.g. `done`, `search`). |
 | `scroll` | Drags a widget by `(dx, dy)`. |
 | `swipe` | Swipes a widget in a named direction (`up`, `down`, `left`, `right`) with configurable distance. |
+| `drag_and_drop` | Drags from a source widget to a destination widget or custom pixel offset. |
 | `scroll_until_visible` | Scrolls a scrollable container until a target widget appears. |
 | `wait_for` | Polls until a widget appears (with timeout). |
 | `wait_for_gone` | Polls until a widget disappears (with timeout). Useful for loading spinners and auto-dismissing dialogs. |
@@ -157,6 +158,7 @@ Once your MCP client is connected, ask the agent to:
 | `get_widget_tree` | Returns the full widget tree as JSON. Use `summaryOnly: true` to filter layout noise. |
 | `get_accessibility_tree` | Returns the Semantics tree — compact, labels-focused, ideal for LLMs. Pass `includeRect: true` if coordinates are needed. |
 | `explore_screen` | Maps all interactive elements on the current screen using the native Semantics tree. |
+| `get_text` | Returns the raw text string from a widget (supports `Text`, `EditableText`, and `RichText` descendants). |
 | `take_screenshot` | Captures a PNG screenshot. Defaults to `type: "app"` (recommended) for maximum reliability; `"device"` uses native capture. |
 | `screenshot_element` | Captures a PNG screenshot of a specific widget by target. Useful for visual regression of individual components. |
 
@@ -186,6 +188,7 @@ Once your MCP client is connected, ask the agent to:
 |---|---|
 | `validate_project` | Checks for required dependencies and platform entitlements. Use `auto_fix: true` to resolve automatically. |
 | `read_logs` | Returns the last N lines from the app's stdout/stderr. |
+| `wipe_app_data` | Wipes device application state (documents, support, and temporary directories). |
 
 ---
 
@@ -225,7 +228,7 @@ Use for **code-level** work — things you'd do in an IDE:
 - Hot reload/restart via DTD (`hot_reload`, `hot_restart`)
 - Reading package source code (`read_package_uris`)
 
-### Flutter Test Pilot MCP Server
+### Flutter Pilot MCP Server
 Use for **live UI** work — things a real user would do:
 - Launching the app on a device (`list_devices`, `start_app`)
 - Tapping, typing, scrolling (`tap`, `enter_text`, `scroll`)
