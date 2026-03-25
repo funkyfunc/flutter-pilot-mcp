@@ -649,6 +649,11 @@ export function registerTools(server: McpServer) {
 		async (args) => forwardToHarness("long_press", args),
 	);
 	server.registerTool(
+		"double_tap",
+		{ description: "Double taps on a widget.", inputSchema: targetShape },
+		async (args) => forwardToHarness("double_tap", args),
+	);
+	server.registerTool(
 		"enter_text",
 		{
 			description: "Enters text into a widget found by the target string.",
@@ -666,7 +671,7 @@ export function registerTools(server: McpServer) {
 	server.registerTool(
 		"scroll",
 		{
-			description: "Scrolls a widget.",
+			description: "Scrolls a widget by exact pixel deltas.",
 			inputSchema: {
 				...targetShape,
 				dx: z.number().describe("Horizontal scroll delta"),
@@ -674,6 +679,24 @@ export function registerTools(server: McpServer) {
 			},
 		},
 		async (args) => forwardToHarness("scroll", args),
+	);
+	server.registerTool(
+		"swipe",
+		{
+			description:
+				"Swipes a widget in a named direction (simpler than scroll for common gestures).",
+			inputSchema: {
+				...targetShape,
+				direction: z
+					.enum(["up", "down", "left", "right"])
+					.describe("Swipe direction"),
+				distance: z
+					.number()
+					.optional()
+					.describe("Swipe distance in pixels (default 300)"),
+			},
+		},
+		async (args) => forwardToHarness("swipe", args),
 	);
 	server.registerTool(
 		"scroll_until_visible",
@@ -709,6 +732,43 @@ export function registerTools(server: McpServer) {
 			inputSchema: { route: z.string().describe("Named route to navigate to") },
 		},
 		async (args) => forwardToHarness("navigate_to", args),
+	);
+	server.registerTool(
+		"go_back",
+		{
+			description:
+				"Pops the current route off the Navigator stack (like pressing the back button).",
+		},
+		async () => {
+			const result = await sendRpc("go_back", {});
+			return jsonResponse(result);
+		},
+	);
+	server.registerTool(
+		"get_current_route",
+		{
+			description:
+				"Returns the name of the currently active route on the Navigator stack.",
+		},
+		async () => {
+			const result = await sendRpc("get_current_route", {});
+			return jsonResponse(result);
+		},
+	);
+	server.registerTool(
+		"press_key",
+		{
+			description:
+				"Simulates a keyboard key press (e.g. enter, tab, escape, backspace, arrow keys).",
+			inputSchema: {
+				key: z
+					.string()
+					.describe(
+						"Key name: enter, tab, escape, backspace, delete, space, arrowUp, arrowDown, arrowLeft, arrowRight, home, end, pageUp, pageDown",
+					),
+			},
+		},
+		async (args) => forwardToHarness("press_key", args),
 	);
 
 	// Verification
@@ -770,6 +830,45 @@ export function registerTools(server: McpServer) {
 		handleTakeScreenshot,
 	);
 	server.registerTool(
+		"screenshot_element",
+		{
+			description:
+				"Captures a screenshot of a specific widget (returns base64 PNG).",
+			inputSchema: {
+				...targetShape,
+				save_path: z
+					.string()
+					.optional()
+					.describe("Optional path to save the screenshot file"),
+			},
+		},
+		async (args) => {
+			const payload = resolveTargetArgs(args);
+			const savePath =
+				typeof payload.save_path === "string" ? payload.save_path : undefined;
+			delete payload.save_path;
+			const result = (await sendRpc(
+				"screenshot_element",
+				payload,
+			)) as ScreenshotResult;
+			if (result.error) throw new Error(result.error);
+			if (savePath) {
+				await fs.writeFile(savePath, Buffer.from(result.data, "base64"));
+				return textResponse(`Element screenshot saved to ${savePath}`);
+			}
+			return {
+				content: [
+					{ type: "text" as const, text: "Element screenshot captured:" },
+					{
+						type: "image" as const,
+						data: result.data,
+						mimeType: "image/png",
+					},
+				],
+			};
+		},
+	);
+	server.registerTool(
 		"get_widget_tree",
 		{
 			description: "Returns a JSON representation of the widget tree.",
@@ -810,6 +909,18 @@ export function registerTools(server: McpServer) {
 			},
 		},
 		async (args) => forwardToHarness("wait_for", args),
+	);
+	server.registerTool(
+		"wait_for_gone",
+		{
+			description:
+				"Waits for a widget to disappear (e.g. a loading spinner or dismissing dialog).",
+			inputSchema: {
+				...targetShape,
+				timeout: z.number().optional().describe("Timeout in milliseconds"),
+			},
+		},
+		async (args) => forwardToHarness("wait_for_gone", args),
 	);
 
 	// Environment

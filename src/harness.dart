@@ -8,6 +8,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 
 // INJECT_IMPORT
@@ -263,6 +264,9 @@ void main() {
           case 'screenshot':
             result = await _handleScreenshot(tester);
             break;
+          case 'screenshot_element':
+            result = await _handleScreenshotElement(tester, params);
+            break;
           case 'assert_exists':
             result = await _handleAssertExists(tester, params);
             break;
@@ -277,6 +281,27 @@ void main() {
             break;
           case 'navigate_to':
             result = await _handleNavigateTo(tester, params);
+            break;
+          case 'go_back':
+            result = await _handleGoBack(tester);
+            break;
+          case 'get_current_route':
+            result = _handleGetCurrentRoute(tester);
+            break;
+          case 'long_press':
+            await _handleLongPress(tester, params);
+            break;
+          case 'double_tap':
+            await _handleDoubleTap(tester, params);
+            break;
+          case 'swipe':
+            await _handleSwipe(tester, params);
+            break;
+          case 'wait_for_gone':
+            await _handleWaitForGone(tester, params);
+            break;
+          case 'press_key':
+            await _handlePressKey(tester, params);
             break;
           case 'intercept_network':
             result = _handleInterceptNetwork(params);
@@ -952,6 +977,184 @@ Future<Map<String, dynamic>> _handleScreenshot(WidgetTester tester) async {
     
     return {
       'data': base64String,
+      'format': 'png',
+    };
+  } catch (e) {
+    return {'error': e.toString()};
+  }
+}
+
+// ─── Long Press ──────────────────────────────────────────────────────────────
+
+Future<void> _handleLongPress(WidgetTester tester, Map<String, dynamic> params) async {
+  final result = _resolveWidgetFinder(params);
+  try {
+    await tester.ensureVisible(result.finder);
+    await tester.pumpAndSettle();
+  } catch (_) {
+    // Ignore visibility errors, proceed to long-press
+  }
+  await tester.longPress(result.finder, warnIfMissed: false);
+  await tester.pumpAndSettle();
+}
+
+// ─── Double Tap ──────────────────────────────────────────────────────────────
+
+Future<void> _handleDoubleTap(WidgetTester tester, Map<String, dynamic> params) async {
+  final result = _resolveWidgetFinder(params);
+  try {
+    await tester.ensureVisible(result.finder);
+    await tester.pumpAndSettle();
+  } catch (_) {
+    // Ignore visibility errors, proceed to tap
+  }
+  await tester.tap(result.finder, warnIfMissed: false);
+  await tester.pump(const Duration(milliseconds: 100));
+  await tester.tap(result.finder, warnIfMissed: false);
+  await tester.pumpAndSettle();
+}
+
+// ─── Swipe (Directional) ─────────────────────────────────────────────────────
+
+Future<void> _handleSwipe(WidgetTester tester, Map<String, dynamic> params) async {
+  final result = _resolveWidgetFinder(params);
+  final direction = params['direction'] as String? ?? 'up';
+  final distance = (params['distance'] as num?)?.toDouble() ?? 300.0;
+
+  final Offset offset;
+  switch (direction.toLowerCase()) {
+    case 'up':    offset = Offset(0, -distance); break;
+    case 'down':  offset = Offset(0, distance);  break;
+    case 'left':  offset = Offset(-distance, 0); break;
+    case 'right': offset = Offset(distance, 0);  break;
+    default: throw 'Invalid swipe direction: "$direction". Use up, down, left, or right.';
+  }
+
+  await tester.drag(result.finder, offset);
+  await tester.pumpAndSettle();
+}
+
+// ─── Wait For Gone ───────────────────────────────────────────────────────────
+
+Future<void> _handleWaitForGone(WidgetTester tester, Map<String, dynamic> params) async {
+  final finder = _resolveLazyWidgetFinder(params);
+  final timeout = Duration(milliseconds: params['timeout'] as int? ?? kDefaultWaitTimeout.inMilliseconds);
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    if (finder.evaluate().isEmpty) return;
+    await tester.pump(kPumpSettlingInterval);
+  }
+  throw 'Timeout waiting for widget to disappear';
+}
+
+// ─── Go Back ─────────────────────────────────────────────────────────────────
+
+Future<Map<String, dynamic>> _handleGoBack(WidgetTester tester) async {
+  final navigatorFinder = find.byType(Navigator);
+  if (navigatorFinder.evaluate().isEmpty) {
+    return {'success': false, 'error': 'No Navigator found in the widget tree.'};
+  }
+
+  final navigatorElement = navigatorFinder.evaluate().first;
+  final navigatorState = (navigatorElement as StatefulElement).state as NavigatorState;
+
+  if (!navigatorState.canPop()) {
+    return {'success': false, 'error': 'Cannot pop — already at root route.'};
+  }
+
+  navigatorState.pop();
+  await tester.pumpAndSettle();
+  return {'success': true};
+}
+
+// ─── Get Current Route ───────────────────────────────────────────────────────
+
+Map<String, dynamic> _handleGetCurrentRoute(WidgetTester tester) {
+  String? currentRouteName;
+
+  final navigatorFinder = find.byType(Navigator);
+  if (navigatorFinder.evaluate().isEmpty) {
+    return {'error': 'No Navigator found in the widget tree.'};
+  }
+
+  final navigatorElement = navigatorFinder.evaluate().first;
+  final navigatorState = (navigatorElement as StatefulElement).state as NavigatorState;
+
+  navigatorState.popUntil((route) {
+    currentRouteName = route.settings.name;
+    return true; // Don't actually pop, just read
+  });
+
+  return {'route': currentRouteName};
+}
+
+// ─── Press Key ───────────────────────────────────────────────────────────────
+
+Future<void> _handlePressKey(WidgetTester tester, Map<String, dynamic> params) async {
+  final keyName = params['key'] as String?;
+  if (keyName == null || keyName.isEmpty) throw 'key parameter is required';
+
+  const keyMap = <String, LogicalKeyboardKey>{
+    'enter': LogicalKeyboardKey.enter,
+    'tab': LogicalKeyboardKey.tab,
+    'escape': LogicalKeyboardKey.escape,
+    'backspace': LogicalKeyboardKey.backspace,
+    'delete': LogicalKeyboardKey.delete,
+    'space': LogicalKeyboardKey.space,
+    'arrowUp': LogicalKeyboardKey.arrowUp,
+    'arrowDown': LogicalKeyboardKey.arrowDown,
+    'arrowLeft': LogicalKeyboardKey.arrowLeft,
+    'arrowRight': LogicalKeyboardKey.arrowRight,
+    'home': LogicalKeyboardKey.home,
+    'end': LogicalKeyboardKey.end,
+    'pageUp': LogicalKeyboardKey.pageUp,
+    'pageDown': LogicalKeyboardKey.pageDown,
+  };
+
+  final logicalKey = keyMap[keyName];
+  if (logicalKey == null) {
+    final knownKeys = keyMap.keys.join(', ');
+    throw 'Unknown key: "$keyName". Supported keys: $knownKeys';
+  }
+
+  await tester.sendKeyEvent(logicalKey);
+  await tester.pumpAndSettle();
+}
+
+// ─── Screenshot Element ──────────────────────────────────────────────────────
+
+Future<Map<String, dynamic>> _handleScreenshotElement(WidgetTester tester, Map<String, dynamic> params) async {
+  try {
+    final result = _resolveWidgetFinder(params);
+    final element = result.elements.first;
+    final renderObject = element.renderObject;
+
+    if (renderObject == null || renderObject is! RenderBox) {
+      return {'error': 'Widget has no RenderBox — cannot capture screenshot.'};
+    }
+
+    // Find the nearest RepaintBoundary ancestor for clean capture
+    RenderRepaintBoundary? boundary;
+    RenderObject? current = renderObject;
+    while (current != null) {
+      if (current is RenderRepaintBoundary) {
+        boundary = current;
+        break;
+      }
+      current = current.parent;
+    }
+
+    if (boundary == null) {
+      // Fallback: capture the full app and crop
+      return _handleScreenshot(tester);
+    }
+
+    final image = await boundary.toImage(pixelRatio: tester.view.devicePixelRatio);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) return {'error': 'Failed to encode element image'};
+
+    return {
+      'data': base64Encode(byteData.buffer.asUint8List()),
       'format': 'png',
     };
   } catch (e) {

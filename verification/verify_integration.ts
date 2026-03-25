@@ -133,10 +133,89 @@ async function runTests(): Promise<void> {
 			expectedText: "Mocked Response Body",
 		});
 
+		// ── Long Press ────────────────────────────────────────────────────────
+		step("long_press");
+		await callTool(client, "long_press", { target: "#long_press_target" });
+		await callTool(client, "assert_text_equals", {
+			target: "#long_press_status",
+			expectedText: "Long pressed!",
+		});
+
+		// ── Double Tap ────────────────────────────────────────────────────────
+		step("double_tap");
+		await callTool(client, "double_tap", { target: "#double_tap_target" });
+		await callTool(client, "assert_text_equals", {
+			target: "#double_tap_count",
+			expectedText: "1",
+		});
+
+		// ── Wait For Gone ─────────────────────────────────────────────────────
+		step("wait_for_gone");
+		await callTool(client, "assert_exists", { target: "#dismissable_widget" });
+		await callTool(client, "tap", { target: "#toggle_visibility" });
+		await callTool(client, "wait_for_gone", {
+			target: "#dismissable_widget",
+			timeout: 3000,
+		});
+		await callTool(client, "assert_not_exists", {
+			target: "#dismissable_widget",
+		});
+
+		// ── Get Current Route ─────────────────────────────────────────────────
+		step("get_current_route");
+		const routeResult = await callTool(client, "get_current_route");
+		const routeData = JSON.parse(extractText(routeResult)) as {
+			route?: string;
+		};
+		if (routeData.route !== "/") {
+			throw new Error(`Expected route '/' but got '${routeData.route}'`);
+		}
+		console.log(`✅ Current route: ${routeData.route}`);
+
+		// ── Press Key ─────────────────────────────────────────────────────────
+		step("press_key (tab)");
+		await callTool(client, "press_key", { key: "tab" });
+		// Just verify it doesn't throw — key events are hard to assert visually
+
+		// ── Screenshot Element ────────────────────────────────────────────────
+		step("screenshot_element");
+		const elementScreenshotPath =
+			"/tmp/flutter_pilot_verify_element_screenshot.png";
+		await callTool(client, "screenshot_element", {
+			target: "#welcome_text",
+			save_path: elementScreenshotPath,
+		});
+		if (
+			!fs.existsSync(elementScreenshotPath) ||
+			fs.statSync(elementScreenshotPath).size === 0
+		) {
+			throw new Error("Element screenshot file missing or empty");
+		}
+		console.log(
+			`✅ Element screenshot created (${fs.statSync(elementScreenshotPath).size} bytes)`,
+		);
+		fs.unlinkSync(elementScreenshotPath);
+
 		// ── Navigation ─────────────────────────────────────────────────────────
 		step("navigate_to");
 		await callTool(client, "navigate_to", { route: "/details" });
 		await callTool(client, "assert_exists", { target: 'text="Item 5"' });
+
+		// ── Swipe ──────────────────────────────────────────────────────────────
+		step("swipe (up on list)");
+		await callTool(client, "swipe", {
+			target: 'type="ListView"',
+			direction: "up",
+			distance: 500,
+		});
+		await callTool(client, "assert_exists", { target: 'text="Item 20"' });
+
+		// ── Go Back ───────────────────────────────────────────────────────────
+		step("go_back");
+		await callTool(client, "go_back");
+		await callTool(client, "assert_exists", {
+			target: 'text="Welcome Home"',
+		});
 
 		// ── Logs ───────────────────────────────────────────────────────────────
 		step("read_logs");

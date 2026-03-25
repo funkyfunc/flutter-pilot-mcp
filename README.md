@@ -6,15 +6,27 @@ Flutter Test Pilot bridges your LLM (Claude, Gemini, etc.) to a running Flutter 
 
 ---
 
+## 💡 Why Flutter Test Pilot?
+
+**Zero-config injection.** No changes to your app's source code. The harness is auto-injected at launch time — just point at a project path and go.
+
+**Focused, LLM-optimized toolset.** ~30 purpose-built tools instead of hundreds. Every tool description fits comfortably in an LLM context window without drowning the model in irrelevant options.
+
+**Suggestive errors.** When a widget isn't found, the harness fuzzy-matches against the live widget tree and returns **"Did you mean…?"** suggestions — dramatically reducing agent retry loops and wasted tokens.
+
+**Token-efficient inspection.** Widget tree output strips Dart generics, flattens layout boilerplate (Container, Padding, SizedBox…), and omits heavyweight coordinate data by default. The agent sees only what matters.
+
+**Full WidgetTester power.** Every interaction runs through Flutter's real test framework with `pumpAndSettle()` after each action — no timing hacks, no flaky coordinate-based taps.
+
 ## ✨ What Can It Do?
 
 | Category | Tools |
 |---|---|
 | **Lifecycle** | `start_app` · `stop_app` · `pilot_hot_restart` · `list_devices` |
-| **Interaction** | `tap` · `enter_text` · `scroll` · `scroll_until_visible` · `wait_for` |
-| **Inspection** | `get_widget_tree` · `get_accessibility_tree` · `explore_screen` · `take_screenshot` |
+| **Interaction** | `tap` · `long_press` · `double_tap` · `enter_text` · `scroll` · `swipe` · `scroll_until_visible` · `wait_for` · `wait_for_gone` · `press_key` |
+| **Inspection** | `get_widget_tree` · `get_accessibility_tree` · `explore_screen` · `take_screenshot` · `screenshot_element` |
 | **Assertions** | `assert_exists` · `assert_not_exists` · `assert_text_equals` · `assert_state` |
-| **Navigation** | `navigate_to` |
+| **Navigation** | `navigate_to` · `go_back` · `get_current_route` |
 | **Environment** | `simulate_background` · `set_network_status` · `intercept_network` |
 | **Utilities** | `validate_project` · `read_logs` |
 
@@ -128,10 +140,15 @@ Once your MCP client is connected, ask the agent to:
 | Tool | Description |
 |---|---|
 | `tap` | Taps a widget. Automatically scrolls it into view first. |
+| `long_press` | Long presses on a widget (triggers `onLongPress` callbacks). |
+| `double_tap` | Double taps on a widget (triggers `onDoubleTap` callbacks). |
 | `enter_text` | Enters text into a `TextField`. Optionally sends a `TextInputAction` (e.g. `done`, `search`). |
 | `scroll` | Drags a widget by `(dx, dy)`. |
+| `swipe` | Swipes a widget in a named direction (`up`, `down`, `left`, `right`) with configurable distance. |
 | `scroll_until_visible` | Scrolls a scrollable container until a target widget appears. |
 | `wait_for` | Polls until a widget appears (with timeout). |
+| `wait_for_gone` | Polls until a widget disappears (with timeout). Useful for loading spinners and auto-dismissing dialogs. |
+| `press_key` | Simulates a keyboard key press (enter, tab, escape, backspace, arrow keys, etc.). |
 
 ### Inspection
 
@@ -141,6 +158,7 @@ Once your MCP client is connected, ask the agent to:
 | `get_accessibility_tree` | Returns the Semantics tree — compact, labels-focused, ideal for LLMs. Pass `includeRect: true` if coordinates are needed. |
 | `explore_screen` | Maps all interactive elements on the current screen using the native Semantics tree. |
 | `take_screenshot` | Captures a PNG screenshot. Defaults to `type: "app"` (recommended) for maximum reliability; `"device"` uses native capture. |
+| `screenshot_element` | Captures a PNG screenshot of a specific widget by target. Useful for visual regression of individual components. |
 
 ### Assertions
 
@@ -156,6 +174,8 @@ Once your MCP client is connected, ask the agent to:
 | Tool | Description |
 |---|---|
 | `navigate_to` | Pushes a named route via `Navigator.pushNamed`. |
+| `go_back` | Pops the current route off the Navigator stack (like pressing the back button). |
+| `get_current_route` | Returns the name of the currently active route — lets the agent know where it is. |
 | `simulate_background` | Sends the app to background and brings it back after a duration. |
 | `set_network_status` | Toggles WiFi on/off (macOS/iOS Simulator only). |
 | `intercept_network` | Registers a mock HTTP response for a URL pattern. Pass null to clear. |
