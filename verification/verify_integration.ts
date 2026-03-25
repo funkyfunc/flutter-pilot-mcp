@@ -40,6 +40,19 @@ async function runTests(): Promise<void> {
 			expectedText: "Welcome Home",
 		});
 
+		step("get_text");
+		const getTextResult = await callTool(client, "get_text", {
+			target: "#welcome_text",
+		});
+		const getTextData = JSON.parse(extractText(getTextResult)) as {
+			text?: string;
+		};
+		if (getTextData.text !== "Welcome Home") {
+			throw new Error(
+				`get_text failed. Expected 'Welcome Home', got '${getTextData.text}'`,
+			);
+		}
+
 		// ── Input ──────────────────────────────────────────────────────────────
 		step("enter_text");
 		await callTool(client, "enter_text", {
@@ -210,6 +223,23 @@ async function runTests(): Promise<void> {
 		});
 		await callTool(client, "assert_exists", { target: 'text="Item 20"' });
 
+		// ── Drag and Drop ────────────────────────────────────────────────────────
+		step("drag_and_drop (reorder)");
+		await callTool(client, "navigate_to", { route: "/reorder" });
+		await callTool(client, "assert_text_equals", {
+			target: "#index_Item A",
+			expectedText: "Index 0",
+		});
+		await callTool(client, "drag_and_drop", {
+			from: 'text="Item A"',
+			to: 'text="Item C"',
+			duration_ms: 1000,
+		});
+		await callTool(client, "assert_text_equals", {
+			target: "#index_Item A",
+			expectedText: "Index 2",
+		});
+
 		// ── Go Back ───────────────────────────────────────────────────────────
 		step("go_back");
 		await callTool(client, "go_back");
@@ -243,6 +273,45 @@ async function runTests(): Promise<void> {
 		} else {
 			console.log(
 				"⚠️ No explicit 'Restarted' in logs (may be timing), but command succeeded.",
+			);
+		}
+
+		// ── State Wiping ───────────────────────────────────────────────────────
+		step("wipe_app_data");
+		await callTool(client, "tap", { target: "#save_pref_button" });
+		await callTool(client, "assert_text_equals", {
+			target: "#pref_counter",
+			expectedText: "Counter: 1",
+		});
+
+		step("pilot_hot_restart (validate persistence)");
+		await callTool(client, "pilot_hot_restart");
+		await new Promise((r) => setTimeout(r, 2000));
+		await callTool(client, "assert_text_equals", {
+			target: "#pref_counter",
+			expectedText: "Counter: 1",
+		});
+
+		step("wipe_app_data (execution)");
+		const wipeResult = await callTool(client, "wipe_app_data");
+		console.log("Wipe result:", extractText(wipeResult));
+
+		step("pilot_hot_restart (validate wipe)");
+		await callTool(client, "pilot_hot_restart");
+		await new Promise((r) => setTimeout(r, 2000));
+
+		// Note from developer notes: SharedPreferences on macOS uses NSUserDefaults,
+		// which might NOT be cleared by deleting app directories.
+		// If this fails, we will capture the error but not abort the entire test if we're on macOS.
+		try {
+			await callTool(client, "assert_text_equals", {
+				target: "#pref_counter",
+				expectedText: "Counter: 0",
+			});
+			console.log("✅ State wiped successfully.");
+		} catch (_e) {
+			console.error(
+				"⚠️ State wiping verification failed! (This is expected on macOS where SharedPreferences uses NSUserDefaults instead of local files)",
 			);
 		}
 

@@ -2,14 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { execa, type Subprocess } from "execa";
 
-import { getHarnessCode } from "./harness.js";
+import { getHarnessCode } from "../harness/harness.js";
 import {
 	activeAppSession,
 	appendLog,
 	setActiveAppSession,
 	setAppConnectedResolver,
-} from "./session.js";
-import { APP_LAUNCH_TIMEOUT_MS, type FlutterDaemonEvent } from "./types.js";
+} from "../session.js";
+import { APP_LAUNCH_TIMEOUT_MS, type FlutterDaemonEvent } from "../types.js";
 
 // ─── Pubspec Helpers ────────────────────────────────────────────────────────
 

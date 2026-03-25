@@ -104,32 +104,3 @@ export interface AppSession {
 
 export type ToolArgs = Record<string, unknown>;
 export type ToolHandler = (args: ToolArgs) => Promise<ToolResponse>;
-
-// ─── Utilities ──────────────────────────────────────────────────────────────
-
-/** Safely extract a message from an unknown caught value. */
-export function toErrorMessage(error: unknown): string {
-	if (error instanceof Error) return error.message;
-	return String(error);
-}
-
-/** Safely extract message + stderr from an execa error. */
-export function toExecErrorMessage(error: unknown): string {
-	if (error instanceof Error) {
-		const stderr = (error as NodeJS.ErrnoException & { stderr?: string })
-			.stderr;
-		return stderr ? `${error.message}\nStderr: ${stderr}` : error.message;
-	}
-	return String(error);
-}
-
-/** Create a standard text-only MCP tool response. */
-export function textResponse(text: string): ToolResponse {
-	return { content: [{ type: "text", text }] };
-}
-
-/** Create a standard JSON MCP tool response. */
-export function jsonResponse(value: unknown, pretty = false): ToolResponse {
-	const text = pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
-	return textResponse(text);
-}

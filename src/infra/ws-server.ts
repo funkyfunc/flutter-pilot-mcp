@@ -1,11 +1,11 @@
 import { type WebSocket, WebSocketServer } from "ws";
-import { pendingRequests } from "./rpc.js";
 import {
 	activeAppSession,
 	appConnectedResolver,
 	setAppConnectedResolver,
-} from "./session.js";
-import type { JsonRpcResponse } from "./types.js";
+} from "../session.js";
+import type { JsonRpcResponse } from "../types.js";
+import { pendingRequests } from "./rpc.js";
 
 let webSocketServer: WebSocketServer | null = null;
 let webSocketPort: number | null = null;

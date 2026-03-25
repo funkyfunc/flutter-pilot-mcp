@@ -1,5 +1,5 @@
-import { activeAppSession, requireSession } from "./session.js";
-import { RPC_TIMEOUT_MS } from "./types.js";
+import { activeAppSession, requireSession } from "../session.js";
+import { RPC_TIMEOUT_MS } from "../types.js";
 
 export const pendingRequests = new Map<
 	string,

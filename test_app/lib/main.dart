@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -17,6 +18,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/': (context) => const HomeScreen(),
         '/details': (context) => const DetailsScreen(),
+        '/reorder': (context) => const ReorderScreen(),
       },
     );
   }
@@ -35,6 +37,26 @@ class _HomeScreenState extends State<HomeScreen> {
   String _longPressStatus = '';
   int _doubleTapCount = 0;
   bool _showDismissable = true;
+  int _counter = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCounter();
+  }
+
+  Future<void> _loadCounter() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _counter = prefs.getInt('counter') ?? 0;
+    });
+  }
+
+  Future<void> _saveCounter() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('counter', _counter + 1);
+    await _loadCounter();
+  }
 
   Future<void> _fetchData() async {
     try {
@@ -82,6 +104,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: const Text('Fetch Data'),
               ),
               Text(_networkResult, key: const Key('network_result')),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                key: const Key('save_pref_button'),
+                onPressed: _saveCounter,
+                child: const Text('Save Prefs'),
+              ),
+              Text('Counter: $_counter', key: const Key('pref_counter')),
               const SizedBox(height: 8),
               GestureDetector(
                 key: const Key('long_press_target'),
@@ -142,3 +171,41 @@ class DetailsScreen extends StatelessWidget {
     );
   }
 }
+
+class ReorderScreen extends StatefulWidget {
+  const ReorderScreen({super.key});
+
+  @override
+  State<ReorderScreen> createState() => _ReorderScreenState();
+}
+
+class _ReorderScreenState extends State<ReorderScreen> {
+  final List<String> _items = ['Item A', 'Item B', 'Item C'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Reorder')),
+      body: ReorderableListView(
+        onReorder: (oldIndex, newIndex) {
+          setState(() {
+            if (newIndex > oldIndex) {
+              newIndex -= 1;
+            }
+            final item = _items.removeAt(oldIndex);
+            _items.insert(newIndex, item);
+          });
+        },
+        children: [
+          for (int i = 0; i < _items.length; i++)
+            ListTile(
+              key: ValueKey(_items[i]),
+              title: Text(_items[i]),
+              subtitle: Text('Index $i', key: Key('index_${_items[i]}')),
+            ),
+        ],
+      ),
+    );
+  }
+}
+

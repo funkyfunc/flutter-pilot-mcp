@@ -3,7 +3,54 @@
  * Does NOT boot the test app — runs in under a second.
  */
 
+import { parseTarget } from "../src/utils.js";
 import { createClient, type McpTool } from "./helpers.js";
+
+function testParseTarget(): boolean {
+	const cases = [
+		{ input: "#myBtn", expected: { finderType: "byKey", key: "myBtn" } },
+		{
+			input: 'text="Submit"',
+			expected: { finderType: "byText", text: "Submit" },
+		},
+		{
+			input: "text='Submit'",
+			expected: { finderType: "byText", text: "Submit" },
+		},
+		{
+			input: "text=`Submit`",
+			expected: { finderType: "byText", text: "Submit" },
+		},
+		{
+			input: "text=Submit",
+			expected: { finderType: "byText", text: "Submit" },
+		},
+		{
+			input: 'type="ElevatedButton"',
+			expected: { finderType: "byType", type: "ElevatedButton" },
+		},
+		{
+			input: 'tooltip="Back"',
+			expected: { finderType: "byTooltip", tooltip: "Back" },
+		},
+		{ input: "Submit", expected: { finderType: "byText", text: "Submit" } },
+	];
+
+	let passed = true;
+	for (const tc of cases) {
+		const result = parseTarget(tc.input);
+		if (JSON.stringify(result) !== JSON.stringify(tc.expected)) {
+			console.error(
+				`❌ parseTarget('${tc.input}') failed. Expected ${JSON.stringify(
+					tc.expected,
+				)}, got ${JSON.stringify(result)}`,
+			);
+			passed = false;
+		}
+	}
+	if (passed) console.log("✅ parseTarget tests passed.");
+	return passed;
+}
 
 const EXPECTED_TOOLS = [
 	"start_app",
@@ -20,6 +67,9 @@ const EXPECTED_TOOLS = [
 	"wait_for",
 	"wait_for_gone",
 	"press_key",
+	"get_text",
+	"drag_and_drop",
+	"wipe_app_data",
 	"get_widget_tree",
 	"get_accessibility_tree",
 	"explore_screen",
@@ -74,6 +124,9 @@ async function main(): Promise<void> {
 			`✅ All ${EXPECTED_TOOLS.length} expected tools found with correct schemas.`,
 		);
 	}
+
+	const parseTargetPassed = testParseTarget();
+	passed = passed && parseTargetPassed;
 
 	client.cleanup();
 	process.exit(passed ? 0 : 1);

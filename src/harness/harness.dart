@@ -9,6 +9,7 @@ import 'package:web_socket_channel/io.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 
 
 // INJECT_IMPORT
@@ -246,6 +247,15 @@ void main() {
           case 'enter_text':
             await _handleEnterText(tester, params);
             break;
+          case 'wipe_app_data':
+            result = await _handleWipeAppData();
+            break;
+          case 'drag_and_drop':
+             await _handleDragAndDrop(tester, params);
+             break;
+          case 'get_text':
+            result = await _handleGetText(tester, params);
+            break;
           case 'get_widget_tree':
             result = _handleGetWidgetTree(tester, params);
             break;
@@ -477,6 +487,92 @@ Future<void> _handleEnterText(WidgetTester tester, Map<String, dynamic> params) 
     await tester.testTextInput.receiveAction(action);
     await tester.pumpAndSettle();
   }
+}
+
+Future<Map<String, dynamic>> _handleGetText(WidgetTester tester, Map<String, dynamic> params) async {
+  final result = _resolveWidgetFinder(params);
+  final element = result.elements.first;
+  final widget = element.widget;
+  
+  String? actualText;
+  if (widget is Text) {
+    actualText = widget.data;
+  } else if (widget is EditableText) {
+    actualText = widget.controller.text;
+  } else if (widget is RichText) {
+    actualText = widget.text.toPlainText();
+  } else {
+    final textFinder = find.descendant(of: result.finder, matching: find.byType(Text));
+    if (textFinder.evaluate().isNotEmpty) {
+       actualText = (textFinder.evaluate().first.widget as Text).data;
+    } else {
+       throw 'Widget is not a Text widget and has no Text descendant.';
+    }
+  }
+
+  return {'text': actualText ?? ''};
+}
+
+Future<Map<String, dynamic>> _handleWipeAppData() async {
+  int deletedCount = 0;
+  final clearedDirs = <String>[];
+
+  Future<void> clearDir(Directory dir) async {
+    if (await dir.exists()) {
+      clearedDirs.add(dir.path);
+      final entities = dir.listSync();
+      for (final entity in entities) {
+        try {
+          if (entity is File) {
+             await entity.delete();
+             deletedCount++;
+          } else if (entity is Directory) {
+             await entity.delete(recursive: true);
+             deletedCount++;
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
+  try { await clearDir(await getApplicationDocumentsDirectory()); } catch (_) {}
+  try { await clearDir(await getApplicationSupportDirectory());   } catch (_) {}
+  try { await clearDir(await getTemporaryDirectory());            } catch (_) {}
+
+  return {
+    'success': true,
+    'deleted_files': deletedCount,
+    'directories_cleared': clearedDirs,
+  };
+}
+
+Future<void> _handleDragAndDrop(WidgetTester tester, Map<String, dynamic> params) async {
+  final fromParams = params['from'] as Map<String, dynamic>?;
+  if (fromParams == null) throw 'from target is required';
+  
+  final fromResult = _resolveWidgetFinder(fromParams);
+  final centerFrom = tester.getCenter(fromResult.finder);
+  
+  Offset offset;
+  if (params['to'] != null) {
+      final toParams = params['to'] as Map<String, dynamic>;
+      final toResult = _resolveWidgetFinder(toParams);
+      final centerTo = tester.getCenter(toResult.finder);
+      offset = centerTo - centerFrom;
+  } else {
+      final dx = (params['dx'] as num?)?.toDouble() ?? 0.0;
+      final dy = (params['dy'] as num?)?.toDouble() ?? 0.0;
+      offset = Offset(dx, dy);
+  }
+  
+  final durationMs = params['duration_ms'] as int?;
+  if (durationMs != null && durationMs > 0) {
+      await tester.timedDrag(fromResult.finder, offset, Duration(milliseconds: durationMs));
+  } else {
+      await tester.drag(fromResult.finder, offset);
+  }
+  
+  await tester.pumpAndSettle();
 }
 
 Future<void> _handleScroll(WidgetTester tester, Map<String, dynamic> params) async {
