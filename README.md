@@ -1,12 +1,12 @@
-# 🧪 Flutter Test Pilot
+# 🧪 Flutter Pilot
 
 An [MCP server](https://modelcontextprotocol.io) that lets AI agents **see, tap, type, scroll, and assert** inside live Flutter apps — no pre-written tests required.
 
-Flutter Test Pilot bridges your LLM (Claude, Gemini, etc.) to a running Flutter application via `integration_test` + WebSocket, giving the agent full interactive control of the UI.
+Flutter Pilot bridges your LLM (Claude, Gemini, etc.) to a running Flutter application via `integration_test` + WebSocket, giving the agent full interactive control of the UI.
 
 ---
 
-## 💡 Why Flutter Test Pilot?
+## 💡 Why Flutter Pilot?
 
 **Zero-config injection.** No changes to your app's source code. The harness is auto-injected at launch time — just point at a project path and go.
 
@@ -194,9 +194,9 @@ Once your MCP client is connected, ask the agent to:
 
 ## 🤝 Using with the Official Dart/Flutter MCP Server
 
-Flutter Test Pilot is **complementary** to the [official Dart/Flutter MCP server](https://github.com/dart-lang/ai). While there is some overlap in app interaction (like widget tree inspection), they serve distinct roles in a developer's workflow:
+Flutter Pilot is **complementary** to the [official Dart/Flutter MCP server](https://github.com/dart-lang/ai). While there is some overlap in app interaction (like widget tree inspection), they serve distinct roles in a developer's workflow:
 
-| Feature | Official Dart MCP | Flutter Test Pilot |
+| Feature | Official Dart MCP | Flutter Pilot |
 |---|---|---|
 | **Primary Focus** | IDE productivity, code analysis & linting | **Live AI-Driven E2E Testing** |
 | **Connectivity** | Dart Tooling Daemon (DTD) | WebSocket to **Injected Harness** |
@@ -205,7 +205,7 @@ Flutter Test Pilot is **complementary** to the [official Dart/Flutter MCP server
 | **Assertions** | Manual tree inspection by agent | **On-device** assertions (`assert_exists`, etc.) |
 | **Key Tools** | `dart_fix`, `analyze_files`, `run_tests`, `pub` | `tap`, `explore_screen`, `assert_*`, `intercept_network` |
 
-**Use both together:** the official server for deep code analysis, package management, and standard IDE features; use Flutter Test Pilot when you need the agent to **live-test** the app UI, simulate complex environment states, and verify behavior with high-level assertions.
+**Use both together:** the official server for deep code analysis, package management, and standard IDE features; use Flutter Pilot when you need the agent to **live-test** the app UI, simulate complex environment states, and verify behavior with high-level assertions.
 
 ### Agent Instructions (Copy & Paste)
 
@@ -231,19 +231,21 @@ Use for **code-level** work — things you'd do in an IDE:
 ### Flutter Pilot MCP Server
 Use for **live UI** work — things a real user would do:
 - Launching the app on a device (`list_devices`, `start_app`)
-- Tapping, typing, scrolling (`tap`, `enter_text`, `scroll`)
-- Checking what's on screen (`explore_screen`, `get_widget_tree`, `take_screenshot`)
-- Asserting UI state (`assert_exists`, `assert_text_equals`, `assert_state`)
+- Tapping, typing, scrolling, swiping, dragging (`tap`, `long_press`, `double_tap`, `enter_text`, `scroll`, `swipe`, `drag_and_drop`, `press_key`)
+- Checking what's on screen (`explore_screen`, `get_widget_tree`, `take_screenshot`, `screenshot_element`, `get_text`)
+- Asserting UI state (`assert_exists`, `assert_not_exists`, `assert_text_equals`, `assert_state`)
 - Mocking network responses (`intercept_network`)
-- Navigating directly to routes (`navigate_to`)
-- Simulating environment conditions (`simulate_background`, `set_network_status`)
+- Navigating (`navigate_to`, `go_back`, `get_current_route`)
+- Simulating environment (`simulate_background`, `set_network_status`)
+- Wiping app data (`wipe_app_data`)
+- Executing scoped waits (`wait_for`, `wait_for_gone`)
 
 ### Key Rules
-- **Hot restart**: Use `pilot_hot_restart` if the app was started via Test Pilot's `start_app`.
+- **Hot restart**: Use `pilot_hot_restart` if the app was started via Pilot's `start_app`.
   Use the official `hot_restart` if working through DTD. Never mix them.
 - **Optimal workflow**: Use the Official server to edit code → `pilot_hot_restart` to refresh →
-  Test Pilot's `explore_screen` or `assert_exists` to verify the change rendered correctly.
-- After any Test Pilot interaction (`tap`, `enter_text`, etc.), the harness automatically
+  Pilot's `explore_screen` or `assert_exists` to verify the change rendered correctly.
+- After any Pilot interaction (`tap`, `enter_text`, etc.), the harness automatically
   calls `pumpAndSettle()`. You don't need manual waits unless testing async network latency.
 ```
 
