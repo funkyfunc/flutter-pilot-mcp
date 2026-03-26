@@ -60,5 +60,12 @@ export function textResponse(text: string): ToolResponse {
 /** Create a standard JSON MCP tool response. */
 export function jsonResponse(value: unknown, pretty = false): ToolResponse {
 	const text = pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
-	return textResponse(text);
+	const isError =
+		typeof value === "object" &&
+		value !== null &&
+		("error" in value || (value as any).success === false);
+	return {
+		content: [{ type: "text" as const, text }],
+		isError: isError ? true : undefined,
+	};
 }

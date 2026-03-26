@@ -509,4 +509,58 @@ export function registerTools(server: McpServer) {
 		},
 		handleValidateProject,
 	);
+
+	// ── Composite Actions ────────────────────────────────────────────────────
+	server.registerTool(
+		"batch_actions",
+		{
+			description:
+				"Execute multiple actions in a single call. Each action is run sequentially with pumpAndSettle between them. Stops on first error. Supported tools: tap, enter_text, long_press, double_tap, scroll, swipe, assert_exists, assert_not_exists, assert_text_equals, wait_for, wait_for_gone, press_key.",
+			inputSchema: {
+				actions: z
+					.array(
+						z.object({
+							tool: z.string().describe("Tool name to execute"),
+							args: z
+								.record(z.string(), z.unknown())
+								.describe("Arguments for the tool"),
+						}),
+					)
+					.describe("Array of actions to execute sequentially"),
+			},
+		},
+		async (args) => {
+			const actions = args.actions as Array<{
+				tool: string;
+				args: Record<string, unknown>;
+			}>;
+			// Resolve target strings in each action's args before forwarding
+			const resolvedActions = actions.map((action) => ({
+				tool: action.tool,
+				args: resolveTargetArgs(action.args),
+			}));
+			const result = await sendRpc("batch_actions", {
+				actions: resolvedActions,
+			});
+			return jsonResponse(result);
+		},
+	);
+
+	// ── Animation ────────────────────────────────────────────────────────────
+	server.registerTool(
+		"wait_for_animation",
+		{
+			description:
+				"Pumps frames for a specified duration without waiting for all animations to settle. Useful for hero transitions, page animations, or custom animation controllers where pumpAndSettle would time out.",
+			inputSchema: {
+				duration_ms: z
+					.number()
+					.optional()
+					.describe(
+						"Duration in milliseconds to pump frames (default 500). Frames are pumped at ~60fps.",
+					),
+			},
+		},
+		async (args) => forwardToHarness("wait_for_animation", args),
+	);
 }

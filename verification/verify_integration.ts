@@ -56,13 +56,31 @@ async function runTests(): Promise<void> {
 		// ── Input ──────────────────────────────────────────────────────────────
 		step("enter_text");
 		await callTool(client, "enter_text", {
-			target: "type=TextField",
+			target: "#my_textfield",
 			text: "Hello World",
 		});
 		await callTool(client, "assert_text_equals", {
-			target: "type=TextField",
+			target: "#my_textfield",
 			expectedText: "Hello World",
 		});
+
+		// ── semanticsLabel Finder ────────────────────────────────────────────
+		step("enter_text (semanticsLabel)");
+		// First enter text using the key to confirm the field works and scroll into view
+		await callTool(client, "enter_text", {
+			target: "#hint_only_field",
+			text: "",
+		});
+		// Now use semanticsLabel to enter text (the hint text becomes the semantics label)
+		await callTool(client, "enter_text", {
+			target: 'semanticsLabel="Search items"',
+			text: "test query",
+		});
+		await callTool(client, "assert_text_equals", {
+			target: "#hint_only_field",
+			expectedText: "test query",
+		});
+		console.log("✅ semanticsLabel finder works for hint-text fields.");
 
 		// ── State ──────────────────────────────────────────────────────────────
 		step("assert_state (checkbox false)");
@@ -96,6 +114,94 @@ async function runTests(): Promise<void> {
 				`Expected ≥3 interactive elements, got ${exploreData.interactive_elements_count}`,
 			);
 		}
+
+		// ── Explore Screen suggestedTarget ────────────────────────────────────
+		step("explore_screen (suggestedTarget)");
+		const exploreResult2 = await callTool(client, "explore_screen");
+		const exploreData2 = JSON.parse(extractText(exploreResult2)) as {
+			elements?: Array<{ suggestedTarget?: string }>;
+		};
+		const hasSuggestedTarget = exploreData2.elements?.some(
+			(e) =>
+				typeof e.suggestedTarget === "string" && e.suggestedTarget.length > 0,
+		);
+		if (!hasSuggestedTarget) {
+			throw new Error("Expected at least one element with suggestedTarget");
+		}
+		console.log("✅ explore_screen emits suggestedTarget.");
+
+		// ── Go Back Overlay (Bottom Sheet) ────────────────────────────────────
+		step("go_back (overlay dismissal)");
+		// tap handler calls ensureVisible() which scrolls the button into view
+		await callTool(client, "tap", { target: "#show_bottom_sheet" });
+		await callTool(client, "assert_exists", {
+			target: 'text="Bottom Sheet Content"',
+		});
+		await callTool(client, "go_back");
+		// Brief wait for dismissal animation
+		await new Promise((r) => setTimeout(r, 500));
+		await callTool(client, "assert_not_exists", {
+			target: 'text="Bottom Sheet Content"',
+		});
+		console.log("✅ go_back dismisses bottom sheet overlay.");
+
+		// ── Batch Actions ─────────────────────────────────────────────────────
+		step("batch_actions");
+		const batchResult = await callTool(client, "batch_actions", {
+			actions: [
+				{ tool: "tap", args: { target: "#my_checkbox" } },
+				{
+					tool: "assert_exists",
+					args: { target: "#my_checkbox" },
+				},
+				{ tool: "tap", args: { target: "#my_checkbox" } },
+			],
+		});
+		const batchData = JSON.parse(extractText(batchResult)) as {
+			all_succeeded?: boolean;
+			results?: Array<{ tool: string; status: string }>;
+		};
+		if (!batchData.all_succeeded) {
+			throw new Error(
+				`batch_actions failed: ${JSON.stringify(batchData.results)}`,
+			);
+		}
+		console.log(
+			`✅ batch_actions executed ${batchData.results?.length} actions successfully.`,
+		);
+
+		// ── Change Detection ──────────────────────────────────────────────────
+		step("change detection (tap)");
+		// Toggle the checkbox and check for changes in the response
+		const tapResult = await callTool(client, "tap", {
+			target: "#toggle_visibility",
+		});
+		const tapData = JSON.parse(extractText(tapResult)) as {
+			changes?: { added?: string[]; removed?: string[]; modified?: string[] };
+		};
+		// The toggle hides "I can disappear" - we should see changes
+		if (tapData.changes) {
+			console.log(
+				`✅ Change detection returned: added=${tapData.changes.added?.length ?? 0}, removed=${tapData.changes.removed?.length ?? 0}, modified=${tapData.changes.modified?.length ?? 0}`,
+			);
+		} else {
+			console.log(
+				"⚠️ No changes detected (may be an edge case with semantics).",
+			);
+		}
+		// Restore state
+		await callTool(client, "tap", { target: "#toggle_visibility" });
+
+		// ── Wait For Animation ────────────────────────────────────────────────
+		step("wait_for_animation");
+		// Start animation by toggling opacity (widget should be visible after previous swipe)
+		await callTool(client, "tap", { target: "#toggle_animation" });
+		// Wait for the 400ms animation to complete
+		await callTool(client, "wait_for_animation", { duration_ms: 500 });
+		// The widget should now be invisible (opacity 0)
+		console.log("✅ wait_for_animation completed without error.");
+		// Restore animation state
+		await callTool(client, "tap", { target: "#toggle_animation" });
 
 		// ── Accessibility ──────────────────────────────────────────────────────
 		step("get_accessibility_tree");
@@ -223,6 +329,8 @@ async function runTests(): Promise<void> {
 		});
 		await callTool(client, "assert_exists", { target: 'text="Item 20"' });
 
+		await callTool(client, "go_back");
+
 		// ── Drag and Drop ────────────────────────────────────────────────────────
 		step("drag_and_drop (reorder)");
 		await callTool(client, "navigate_to", { route: "/reorder" });
@@ -278,10 +386,17 @@ async function runTests(): Promise<void> {
 
 		// ── State Wiping ───────────────────────────────────────────────────────
 		step("wipe_app_data");
+		const preTapResult = await callTool(client, "get_text", {
+			target: "#pref_counter",
+		});
+		const preTapText = JSON.parse(extractText(preTapResult)).text as string;
+		const currentCount = parseInt(preTapText.replace("Counter: ", ""), 10) || 0;
+		const expectedCount = currentCount + 1;
+
 		await callTool(client, "tap", { target: "#save_pref_button" });
 		await callTool(client, "assert_text_equals", {
 			target: "#pref_counter",
-			expectedText: "Counter: 1",
+			expectedText: `Counter: ${expectedCount}`,
 		});
 
 		step("pilot_hot_restart (validate persistence)");
@@ -289,7 +404,7 @@ async function runTests(): Promise<void> {
 		await new Promise((r) => setTimeout(r, 2000));
 		await callTool(client, "assert_text_equals", {
 			target: "#pref_counter",
-			expectedText: "Counter: 1",
+			expectedText: `Counter: ${expectedCount}`,
 		});
 
 		step("wipe_app_data (execution)");

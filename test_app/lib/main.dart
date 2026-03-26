@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _longPressStatus = '';
   int _doubleTapCount = 0;
   bool _showDismissable = true;
+  bool _animationVisible = true;
   int _counter = 0;
 
   @override
@@ -75,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Home Screen')),
       body: SingleChildScrollView(
+        key: const Key('home_scroll_view'),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -141,6 +143,40 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               if (_showDismissable)
                 const Text('I can disappear', key: Key('dismissable_widget')),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: TextField(
+                  key: const Key('hint_only_field'),
+                  decoration: const InputDecoration(hintText: 'Search items'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                key: const Key('show_bottom_sheet'),
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (context) => Container(
+                      padding: const EdgeInsets.all(24),
+                      child: const Text('Bottom Sheet Content', key: Key('bottom_sheet_text')),
+                    ),
+                  );
+                },
+                child: const Text('Show Bottom Sheet'),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                key: const Key('toggle_animation'),
+                onPressed: () => setState(() => _animationVisible = !_animationVisible),
+                child: const Text('Toggle Animation'),
+              ),
+              AnimatedOpacity(
+                key: const Key('animated_widget'),
+                opacity: _animationVisible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 400),
+                child: const Text('Animated Text', key: Key('animated_text')),
+              ),
             ],
           ),
         ),
@@ -187,6 +223,7 @@ class _ReorderScreenState extends State<ReorderScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Reorder')),
       body: ReorderableListView(
+        buildDefaultDragHandles: false,
         onReorder: (oldIndex, newIndex) {
           setState(() {
             if (newIndex > oldIndex) {
@@ -198,10 +235,13 @@ class _ReorderScreenState extends State<ReorderScreen> {
         },
         children: [
           for (int i = 0; i < _items.length; i++)
-            ListTile(
+            ReorderableDragStartListener(
+              index: i,
               key: ValueKey(_items[i]),
-              title: Text(_items[i]),
-              subtitle: Text('Index $i', key: Key('index_${_items[i]}')),
+              child: ListTile(
+                title: Text(_items[i]),
+                subtitle: Text('Index $i', key: Key('index_${_items[i]}')),
+              ),
             ),
         ],
       ),

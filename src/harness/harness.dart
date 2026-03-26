@@ -19,6 +19,83 @@ const kPumpSettlingInterval = Duration(milliseconds: 100);
 const kDefaultWaitTimeout = Duration(milliseconds: 5000);
 const kMaxWebSocketRetries = 5;
 
+// --- Change Detection ---
+
+Map<int, Map<String, dynamic>> _captureSemanticsSnapshot(WidgetTester tester) {
+  final snapshot = <int, Map<String, dynamic>>{};
+  // ignore: deprecated_member_use
+  final root = tester.binding.pipelineOwner.semanticsOwner?.rootSemanticsNode;
+  if (root == null) return snapshot;
+  void visit(SemanticsNode node) {
+    final data = node.getSemanticsData();
+    if (data.label.isNotEmpty || data.value.isNotEmpty || data.tooltip.isNotEmpty) {
+      snapshot[node.id] = {
+        'label': data.label,
+        'value': data.value,
+        'tooltip': data.tooltip,
+      };
+    }
+    if (node.hasChildren) {
+      node.visitChildren((child) {
+        visit(child);
+        return true;
+      });
+    }
+  }
+  visit(root);
+  return snapshot;
+}
+
+Map<String, dynamic> _computeSemanticsChanges(
+  Map<int, Map<String, dynamic>> before,
+  Map<int, Map<String, dynamic>> after,
+) {
+  final added = <String>[];
+  final removed = <String>[];
+  final modified = <String>[];
+
+  for (final id in after.keys) {
+    if (!before.containsKey(id)) {
+      final a = after[id]!;
+      final desc = a['label'] ?? a['value'] ?? a['tooltip'] ?? 'id=$id';
+      added.add(desc.toString());
+    } else {
+      final b = before[id]!;
+      final a = after[id]!;
+      if (b['label'] != a['label'] || b['value'] != a['value']) {
+        final oldDesc = b['label'].toString().isNotEmpty ? b['label'] : b['value'];
+        final newDesc = a['label'].toString().isNotEmpty ? a['label'] : a['value'];
+        if (oldDesc != newDesc) modified.add('"$oldDesc" → "$newDesc"');
+      }
+    }
+  }
+  for (final id in before.keys) {
+    if (!after.containsKey(id)) {
+      final b = before[id]!;
+      final desc = b['label'] ?? b['value'] ?? b['tooltip'] ?? 'id=$id';
+      removed.add(desc.toString());
+    }
+  }
+
+  if (added.isEmpty && removed.isEmpty && modified.isEmpty) return {};
+  return {
+    if (added.isNotEmpty) 'added': added,
+    if (removed.isNotEmpty) 'removed': removed,
+    if (modified.isNotEmpty) 'modified': modified,
+  };
+}
+
+Future<Map<String, dynamic>?> _withChangeDetection(
+  WidgetTester tester,
+  Future<void> Function() action,
+) async {
+  final before = _captureSemanticsSnapshot(tester);
+  await action();
+  final after = _captureSemanticsSnapshot(tester);
+  final changes = _computeSemanticsChanges(before, after);
+  return changes.isNotEmpty ? changes : null;
+}
+
 // --- Global Network Interceptor ---
 class _McpHttpOverrides extends HttpOverrides {
   final Map<String, String> _mocks = {};
@@ -196,6 +273,9 @@ void main() {
     // Wait for the app to settle initially
     await tester.pumpAndSettle();
 
+    // Enable semantics globally so bySemanticsLabel finders always work
+    tester.binding.ensureSemantics();
+
     final wsUrl = const String.fromEnvironment('WS_URL', defaultValue: 'ws://localhost:8080');
     debugPrint('MCP: Connecting to $wsUrl');
     
@@ -242,7 +322,8 @@ void main() {
         Object? result;
         switch (method) {
           case 'tap':
-            await _handleTap(tester, params);
+            final tapChanges = await _withChangeDetection(tester, () => _handleTap(tester, params));
+            if (tapChanges != null) result = {'status': 'success', 'changes': tapChanges};
             break;
           case 'enter_text':
             await _handleEnterText(tester, params);
@@ -319,6 +400,12 @@ void main() {
           case 'explore_screen':
             result = await _handleExploreScreen(tester);
             break;
+          case 'batch_actions':
+            result = await _handleBatchActions(tester, params, channel);
+            break;
+          case 'wait_for_animation':
+            await _handleWaitForAnimation(tester, params);
+            break;
           default:
             throw 'Unknown method: $method';
         }
@@ -347,7 +434,9 @@ void main() {
 String _buildSuggestiveErrorMessage(String finderType, Map<String, dynamic> params) {
   final allElements = find.byType(Widget).evaluate().toList();
   final suggestions = <String>[];
+  final alternatives = <String>[];
   
+  // Search for matching text widgets
   if (finderType == 'byText' && params['text'] != null) {
     final target = params['text'].toString().toLowerCase();
     final textWidgets = allElements.where((e) => e.widget is Text).take(100);
@@ -368,11 +457,35 @@ String _buildSuggestiveErrorMessage(String finderType, Map<String, dynamic> para
     }
   }
 
+  // Search semantics tree for matching labels (alternative finder strategy)
+  final searchLabel = params['text']?.toString() ?? params['key']?.toString() ?? '';
+  if (searchLabel.isNotEmpty) {
+    try {
+      // ignore: deprecated_member_use
+      final root = WidgetsBinding.instance.pipelineOwner.semanticsOwner?.rootSemanticsNode;
+      if (root != null) {
+        void scanSemantics(SemanticsNode node) {
+          final data = node.getSemanticsData();
+          if (data.label.toLowerCase().contains(searchLabel.toLowerCase())) {
+            alternatives.add('Try: target=\'semanticsLabel="${data.label}"\' (semantics node id=${node.id})');
+          }
+          if (node.hasChildren) {
+            node.visitChildren((child) { scanSemantics(child); return true; });
+          }
+        }
+        scanSemantics(root);
+      }
+    } catch (_) {}
+  }
+
   final suggestionText = suggestions.isNotEmpty 
     ? '\nSuggestions:\n - ${suggestions.take(3).join('\n - ')}' 
     : '';
+  final alternativeText = alternatives.isNotEmpty
+    ? '\nAlternative finders:\n - ${alternatives.take(3).join('\n - ')}'
+    : '';
 
-  return 'WidgetNotFoundException: No widget found with type "$finderType" and params "$params"$suggestionText';
+  return 'WidgetNotFoundException: No widget found with type "$finderType" and params "$params"$suggestionText$alternativeText';
 }
 
 _FinderResult _resolveWidgetFinder(Map<String, dynamic> params) {
@@ -444,7 +557,16 @@ Finder _resolveLazyWidgetFinder(Map<String, dynamic> params) {
       break;
     case 'bysemanticslabel':
       final label = params['semanticsLabel'] as String;
-      finder = find.bySemanticsLabel(RegExp(RegExp.escape(label)));
+      final labelLower = label.toLowerCase();
+      // Use .last to get the deepest match — semantics labels propagate upward
+      // from child widgets, so the last match is the actual input field, not its parent.
+      finder = find.byElementPredicate((Element element) {
+        final semantics = element.renderObject?.debugSemantics;
+        if (semantics == null) return false;
+        final data = semantics.getSemanticsData();
+        return data.label.toLowerCase().contains(labelLower) ||
+               data.hint.toLowerCase().contains(labelLower);
+      }).last;
       break;
     default:
       throw 'Unsupported finder type: $finderType';
@@ -503,6 +625,14 @@ Future<Map<String, dynamic>> _handleGetText(WidgetTester tester, Map<String, dyn
     actualText = widget.data;
   } else if (widget is EditableText) {
     actualText = widget.controller.text;
+  } else if (widget is TextField) {
+    actualText = widget.controller?.text;
+    if (actualText == null) {
+      final editable = find.descendant(of: result.finder, matching: find.byType(EditableText));
+      if (editable.evaluate().isNotEmpty) {
+        actualText = (editable.evaluate().first.widget as EditableText).controller.text;
+      }
+    }
   } else if (widget is RichText) {
     actualText = widget.text.toPlainText();
   } else {
@@ -674,6 +804,14 @@ Future<Map<String, dynamic>> _handleAssertTextEquals(WidgetTester tester, Map<St
     actualText = widget.data;
   } else if (widget is EditableText) {
     actualText = widget.controller.text;
+  } else if (widget is TextField) {
+    actualText = widget.controller?.text;
+    if (actualText == null) {
+      final editable = find.descendant(of: result.finder, matching: find.byType(EditableText));
+      if (editable.evaluate().isNotEmpty) {
+        actualText = (editable.evaluate().first.widget as EditableText).controller.text;
+      }
+    }
   } else if (widget is RichText) {
     actualText = widget.text.toPlainText();
   } else {
@@ -789,12 +927,115 @@ Future<Map<String, dynamic>> _handleExploreScreen(WidgetTester tester) async {
   final interactiveNodes = <Map<String, dynamic>>[];
   _collectInteractiveSemantics(root, interactiveNodes);
   
+  // Post-process: disambiguate duplicate suggestedTarget values with index
+  final targetCounts = <String, int>{};
+  for (final node in interactiveNodes) {
+    final target = node['suggestedTarget'] as String? ?? '';
+    targetCounts[target] = (targetCounts[target] ?? 0) + 1;
+  }
+  
+  final targetSeenCount = <String, int>{};
+  for (final node in interactiveNodes) {
+    final target = node['suggestedTarget'] as String? ?? '';
+    if (targetCounts[target]! > 1) {
+      final idx = targetSeenCount[target] ?? 0;
+      // Don't modify id= targets — they're already unique
+      if (!target.startsWith('id=')) {
+        node['suggestedTarget'] = '$target index=$idx';
+      }
+      targetSeenCount[target] = idx + 1;
+    }
+  }
+  
   semanticsHandle.dispose();
 
   return {
     'interactive_elements_count': interactiveNodes.length,
     'elements': interactiveNodes,
   };
+}
+
+// ─── Batch Actions ───────────────────────────────────────────────────────────
+
+Future<Map<String, dynamic>> _handleBatchActions(
+  WidgetTester tester,
+  Map<String, dynamic> params,
+  dynamic channel,
+) async {
+  final actions = params['actions'] as List<dynamic>? ?? [];
+  final results = <Map<String, dynamic>>[];
+
+  for (int i = 0; i < actions.length; i++) {
+    final action = actions[i] as Map<String, dynamic>;
+    final tool = action['tool'] as String? ?? action.keys.first;
+    final args = (action['args'] as Map<String, dynamic>?) ?? 
+                 (action[tool] as Map<String, dynamic>?) ?? {};
+
+    try {
+      Object? result;
+      switch (tool) {
+        case 'tap':
+          final changes = await _withChangeDetection(tester, () => _handleTap(tester, args));
+          if (changes != null) result = {'status': 'success', 'changes': changes};
+          break;
+        case 'enter_text':
+          await _handleEnterText(tester, args);
+          break;
+        case 'long_press':
+          await _handleLongPress(tester, args);
+          break;
+        case 'double_tap':
+          await _handleDoubleTap(tester, args);
+          break;
+        case 'scroll':
+          await _handleScroll(tester, args);
+          break;
+        case 'swipe':
+          await _handleSwipe(tester, args);
+          break;
+        case 'assert_exists':
+          result = await _handleAssertExists(tester, args);
+          break;
+        case 'assert_not_exists':
+          result = await _handleAssertNotExists(tester, args);
+          break;
+        case 'assert_text_equals':
+          result = await _handleAssertTextEquals(tester, args);
+          break;
+        case 'wait_for':
+          await _handleWaitFor(tester, args);
+          break;
+        case 'wait_for_gone':
+          await _handleWaitForGone(tester, args);
+          break;
+        case 'press_key':
+          await _handlePressKey(tester, args);
+          break;
+        default:
+          throw 'Unsupported batch action: $tool';
+      }
+      results.add({'tool': tool, 'status': 'success', if (result != null) 'result': result});
+    } catch (e) {
+      results.add({'tool': tool, 'status': 'error', 'error': e.toString()});
+      return {'results': results, 'failed_at_index': i};
+    }
+  }
+
+  return {'results': results, 'all_succeeded': true};
+}
+
+// ─── Wait For Animation ──────────────────────────────────────────────────────
+
+Future<void> _handleWaitForAnimation(WidgetTester tester, Map<String, dynamic> params) async {
+  final durationMs = params['duration_ms'] as int? ?? 500;
+  final frameInterval = const Duration(milliseconds: 16); // ~60fps
+  final totalDuration = Duration(milliseconds: durationMs);
+  
+  var elapsed = Duration.zero;
+  while (elapsed < totalDuration) {
+    await tester.pump(frameInterval);
+    elapsed += frameInterval;
+  }
 }
 
 String _buildSuggestedTarget(SemanticsNode node, SemanticsData data) {
