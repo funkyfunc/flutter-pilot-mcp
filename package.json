@@ -1,6 +1,6 @@
 {
 	"name": "flutter-driver-mcp",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "An MCP server that lets AI agents drive Flutter apps — tap, type, scroll, assert, and screenshot live UIs via integration_test.",
 	"author": "funkyfunc",
 	"license": "MIT",
