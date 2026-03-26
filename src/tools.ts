@@ -231,10 +231,14 @@ export function registerTools(server: McpServer) {
 					.string()
 					.optional()
 					.describe("Optional target string for the scrollable container"),
+				dx: z
+					.number()
+					.optional()
+					.describe("Horizontal scroll delta per step (default 0.0)"),
 				dy: z
 					.number()
 					.optional()
-					.describe("Vertical scroll delta per step (default 50.0)"),
+					.describe("Vertical scroll delta per step (default -50.0)"),
 			},
 		},
 		async (args) => {

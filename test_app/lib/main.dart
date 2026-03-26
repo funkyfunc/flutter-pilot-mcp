@@ -40,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _animationVisible = true;
   int _counter = 0;
   bool _showDelayedWidget = false;
+  int _keyPressCount = 0;
 
   @override
   void initState() {
@@ -210,7 +211,29 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: () => setState(() => _showDelayedWidget = false),
                   child: const Text('I am delayed'),
                 ),
+              const SizedBox(height: 8),
+              TextField(
+                key: const Key('key_press_field'),
+                decoration: const InputDecoration(hintText: 'Press enter here'),
+                onSubmitted: (_) => setState(() => _keyPressCount++),
+              ),
+              Text('Keys Pressed: $_keyPressCount', key: const Key('key_press_count')),
+              const SizedBox(height: 8),
               const SizedBox(height: 1200),
+              SizedBox(
+                height: 100,
+                child: ListView.builder(
+                  key: const Key('nested_list_view'),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: 50,
+                  itemBuilder: (context, index) => Container(
+                    width: 80,
+                    alignment: Alignment.center,
+                    child: Text('Nested $index', key: Key('nested_item_$index')),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
               const Text('Offscreen target', key: Key('offscreen_target')),
             ],
           ),

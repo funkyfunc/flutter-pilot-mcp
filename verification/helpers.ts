@@ -67,8 +67,14 @@ export function createClient(
 	let msgId = 1;
 	const pending = new Map<number, (res: McpResponse) => void>();
 
+	let buffer = "";
+
 	server.stdout?.on("data", (data: Buffer) => {
-		for (const line of data.toString().split("\n")) {
+		buffer += data.toString();
+		const lines = buffer.split("\n");
+		buffer = lines.pop() ?? "";
+
+		for (const line of lines) {
 			if (!line.trim() || line.startsWith("MCP:")) continue;
 			try {
 				const msg = JSON.parse(line) as McpResponse;

@@ -31,7 +31,6 @@ export async function ensureWsServer(): Promise<number> {
 			ws.on("message", (data: Buffer) => {
 				try {
 					const msg = JSON.parse(data.toString()) as JsonRpcResponse;
-
 					if (msg.id && pendingRequests.has(String(msg.id))) {
 						const key = String(msg.id);
 						const pending = pendingRequests.get(key);

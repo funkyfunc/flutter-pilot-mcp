@@ -143,6 +143,47 @@ async function runTests(): Promise<void> {
 		});
 		console.log("✅ assert_enabled works.");
 
+		step("enter_text");
+		await callTool(client, "enter_text", {
+			target: "#my_textfield",
+			text: "Hello World",
+		});
+		await callTool(client, "assert_text_equals", {
+			target: "#my_textfield",
+			expectedText: "Hello World",
+		});
+
+		step("enter_text (semanticsLabel)");
+		// Clear it first (optional)
+		await callTool(client, "enter_text", {
+			target: "#hint_only_field",
+			text: "",
+		});
+		// Type into it using its hint text as semanticsLabel
+		await callTool(client, "enter_text", {
+			target: 'semanticsLabel="Search items"',
+			text: "test query",
+		});
+		await callTool(client, "assert_text_equals", {
+			target: "#hint_only_field",
+			expectedText: "test query",
+		});
+		console.log("✅ semanticsLabel finder works for hint-text fields.");
+
+		step("TextInputAction.done");
+		// Verify that enter_text can also trigger the onSubmitted callback using the action parameter
+		await callTool(client, "tap", { target: "#key_press_field" });
+		await callTool(client, "enter_text", {
+			target: "#key_press_field",
+			text: "enter testing",
+			action: "done",
+		});
+		await callTool(client, "assert_text_equals", {
+			target: "#key_press_count",
+			expectedText: "Keys Pressed: 1",
+		});
+		console.log("✅ enter_text triggered TextInputAction.done correctly.");
+
 		step("Visual Assertions - assert_visible offscreen");
 		try {
 			await callTool(client, "assert_visible", { target: "#offscreen_target" });
@@ -163,13 +204,31 @@ async function runTests(): Promise<void> {
 		// Ensure it is now visible (validating the new pumpAndSettle in assert_visible)
 		await callTool(client, "assert_visible", { target: "#offscreen_target" });
 
-		// Must scroll back up for the rest of tests
+		// ── Nested target scroll_until_visible ──────────────────────────────────
+		step("scroll_until_visible (nested list)");
+
 		await callTool(client, "scroll_until_visible", {
-			target: "#welcome_text",
+			target: "#nested_list_view",
+			dy: -500,
+		});
+
+		// Test scrolling inside the new horizontal list view without moving the vertical scroll area
+		await callTool(client, "scroll_until_visible", {
+			target: "#nested_item_40",
+			scrollable_target: "#nested_list_view",
+			dx: -200, // Horizontal drag!
+			dy: 0,
+		});
+
+		// Now scroll back up further so ALL text fields are grouped on screen again!
+		await callTool(client, "scroll_until_visible", {
+			target: "#key_press_field",
 			dy: 500,
 		});
 
-		console.log("✅ assert_visible and scroll_until_visible work correctly.");
+		console.log(
+			"✅ assert_visible, scroll, and scroll_until_visible work correctly on main axis.",
+		);
 
 		step("Compound Selectors");
 		// Two widgets have text="Submit". If we tap by text=Submit, it might fail with AmbiguousFinderException.
@@ -199,7 +258,7 @@ async function runTests(): Promise<void> {
 			"✅ Implicit waits (timeout_ms) successfully handled delayed widget.",
 		);
 
-		// Must scroll back up to the absolute top for the text fields before testing explore filter
+		// Scroll back to the absolute top for the text fields before testing explore filter
 		await callTool(client, "scroll_until_visible", {
 			target: "#welcome_text",
 			dy: 500,
@@ -215,7 +274,7 @@ async function runTests(): Promise<void> {
 		if (filterData.elements?.length !== 2) {
 			console.log(JSON.stringify(filterData.elements, null, 2));
 			throw new Error(
-				`Expected exactly 2 TextFields, got ${filterData.elements?.length || 0}`,
+				`Expected exactly 2 TextFields at the top, got ${filterData.elements?.length || 0}`,
 			);
 		}
 		const withinResult = await callTool(client, "explore_screen", {

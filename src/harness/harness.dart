@@ -415,7 +415,6 @@ void main() {
           default:
             throw 'Unknown method: $method';
         }
-        
         channel.sink.add(jsonEncode({
           'jsonrpc': '2.0',
           'id': id,
@@ -516,7 +515,7 @@ _FinderResult _resolveWidgetFinder(Map<String, dynamic> params) {
        return _FinderResult(finder.at(index), [elements[index]]);
     }
     
-    final matches = elements.map((e) => _serializeElement(e, summaryOnly: true, screenSize: Size.zero, inOverlay: false)).toList();
+    final matches = elements.map((e) => _serializeElement(e, summaryOnly: true, screenSize: Size.zero, inOverlay: false, nodeCount: [0])).toList();
     throw AmbiguousFinderException(
       'Too many elements found for finder type "$finderType" with params "$params". '
       'Consider using a more specific finder, adding a key, or explicitly passing an "index" parameter (e.g. index: 0) to select the exact match out of ${elements.length}.',
@@ -1305,7 +1304,7 @@ Map<String, dynamic> _handleGetWidgetTree(WidgetTester tester, Map<String, dynam
   final summaryOnly = params['summaryOnly'] == true;
   final view = tester.view;
   final screenSize = view.physicalSize / view.devicePixelRatio;
-  return _serializeElement(root, summaryOnly: summaryOnly, screenSize: screenSize, inOverlay: false);
+  return _serializeElement(root, summaryOnly: summaryOnly, screenSize: screenSize, inOverlay: false, nodeCount: [0]);
 }
 
 void _extractWidgetProperties(Widget widget, Map<String, dynamic> json) {
@@ -1325,6 +1324,8 @@ void _extractWidgetProperties(Widget widget, Map<String, dynamic> json) {
 
 void _detectViewportVisibility(RenderObject renderObject, Size screenSize, Map<String, dynamic> json) {
   if (!renderObject.attached) return;
+  if (renderObject is! RenderBox) return;
+  if (renderObject.runtimeType.toString() == 'RenderEditable') return;
   try {
     final transform = renderObject.getTransformTo(null);
     final paintBounds = MatrixUtils.transformRect(transform, renderObject.paintBounds);
@@ -1337,7 +1338,12 @@ void _detectViewportVisibility(RenderObject renderObject, Size screenSize, Map<S
   }
 }
 
-Map<String, dynamic> _serializeElement(Element element, {required bool summaryOnly, required Size screenSize, required bool inOverlay}) {
+Map<String, dynamic> _serializeElement(Element element, {required bool summaryOnly, required Size screenSize, required bool inOverlay, required List<int> nodeCount}) {
+  nodeCount[0]++;
+  if (nodeCount[0] > 10000) {
+    throw 'Widget tree is too large to serialize entirely (>10,000 nodes). Please set summaryOnly: true to filter the tree to interactive/meaningful elements.';
+  }
+
   final widget = element.widget;
   final type = widget.runtimeType.toString().replaceAll(RegExp(r'<[^>]*>'), '');
   
@@ -1347,7 +1353,7 @@ Map<String, dynamic> _serializeElement(Element element, {required bool summaryOn
   final children = <Map<String, dynamic>>[];
   
   element.visitChildren((child) {
-    final serializedChild = _serializeElement(child, summaryOnly: summaryOnly, screenSize: screenSize, inOverlay: currentlyInOverlay);
+    final serializedChild = _serializeElement(child, summaryOnly: summaryOnly, screenSize: screenSize, inOverlay: currentlyInOverlay, nodeCount: nodeCount);
     if (!summaryOnly || _shouldKeep(serializedChild)) {
       children.add(serializedChild);
     } else if (serializedChild.containsKey('children')) {
@@ -1358,8 +1364,10 @@ Map<String, dynamic> _serializeElement(Element element, {required bool summaryOn
   final json = <String, dynamic>{'type': type};
   if (currentlyInOverlay) json['isOverlay'] = true;
 
-  if (element.renderObject != null) {
-    _detectViewportVisibility(element.renderObject!, screenSize, json);
+  if (!summaryOnly || _shouldKeep(json)) {
+    if (element.renderObject != null) {
+      _detectViewportVisibility(element.renderObject!, screenSize, json);
+    }
   }
 
   _extractWidgetProperties(widget, json);
