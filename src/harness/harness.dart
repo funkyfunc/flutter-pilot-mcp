@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -23,7 +24,6 @@ const kMaxWebSocketRetries = 5;
 
 Map<int, Map<String, dynamic>> _captureSemanticsSnapshot(WidgetTester tester) {
   final snapshot = <int, Map<String, dynamic>>{};
-  // ignore: deprecated_member_use
   final root = tester.binding.pipelineOwner.semanticsOwner?.rootSemanticsNode;
   if (root == null) return snapshot;
   void visit(SemanticsNode node) {
@@ -370,6 +370,12 @@ void main() {
           case 'assert_state':
             result = await _handleAssertState(tester, params);
             break;
+          case 'assert_visible':
+            result = await _handleAssertVisible(tester, params);
+            break;
+          case 'assert_enabled':
+            result = await _handleAssertEnabled(tester, params);
+            break;
           case 'navigate_to':
             result = await _handleNavigateTo(tester, params);
             break;
@@ -398,7 +404,7 @@ void main() {
             result = _handleInterceptNetwork(params);
             break;
           case 'explore_screen':
-            result = await _handleExploreScreen(tester);
+            result = await _handleExploreScreen(tester, params);
             break;
           case 'batch_actions':
             result = await _handleBatchActions(tester, params, channel);
@@ -461,7 +467,6 @@ String _buildSuggestiveErrorMessage(String finderType, Map<String, dynamic> para
   final searchLabel = params['text']?.toString() ?? params['key']?.toString() ?? '';
   if (searchLabel.isNotEmpty) {
     try {
-      // ignore: deprecated_member_use
       final root = WidgetsBinding.instance.pipelineOwner.semanticsOwner?.rootSemanticsNode;
       if (root != null) {
         void scanSemantics(SemanticsNode node) {
@@ -528,6 +533,29 @@ _FinderResult _resolveWidgetFinder(Map<String, dynamic> params) {
 // If it's lazy loaded (e.g. ListView.builder), it MIGHT NOT BE IN THE TREE yet.
 // In that case, flutter_test's scrollUntilVisible iterates until it finds it.
 // So we MUST NOT evaluate/throw if empty for scrollUntilVisible target.
+
+Future<_FinderResult> _resolveWidgetFinderWithWait(WidgetTester tester, Map<String, dynamic> params) async {
+  final timeoutMs = params['timeout_ms'] as int?;
+  if (timeoutMs != null && timeoutMs > 0) {
+    final frameInterval = const Duration(milliseconds: 16);
+    final totalDuration = Duration(milliseconds: timeoutMs);
+    Duration elapsed = Duration.zero;
+    
+    while (elapsed < totalDuration) {
+      try {
+        return _resolveWidgetFinder(params);
+      } catch (e) {
+        if (e is AmbiguousFinderException) {
+          rethrow;
+        }
+      }
+      await tester.pump(frameInterval);
+      elapsed += frameInterval;
+    }
+  }
+  return _resolveWidgetFinder(params);
+}
+
 Finder _resolveLazyWidgetFinder(Map<String, dynamic> params) {
   final finderType = params['finderType'] as String?;
   if (finderType == null) throw 'finderType is required';
@@ -568,10 +596,40 @@ Finder _resolveLazyWidgetFinder(Map<String, dynamic> params) {
       // Instead, we extract .last in `_resolveWidgetFinder`, safely checking if elements.isEmpty first.
       finder = find.byElementPredicate((Element element) {
         final semantics = element.renderObject?.debugSemantics;
-        if (semantics == null) return false;
+        if (semantics == null) { return false; }
         final data = semantics.getSemanticsData();
         return data.label.toLowerCase().contains(labelLower) ||
                data.hint.toLowerCase().contains(labelLower);
+      });
+      break;
+    case 'bycompound':
+      final conditions = Map<String, dynamic>.from(params['conditions'] as Map);
+      finder = find.byElementPredicate((Element element) {
+        final semantics = element.renderObject?.debugSemantics;
+        if (semantics == null) { return false; }
+        final data = semantics.getSemanticsData();
+        
+        for (final entry in conditions.entries) {
+          final key = entry.key;
+          final expectedValue = entry.value.toString().toLowerCase();
+
+          if (key == 'type') {
+            if (element.widget.runtimeType.toString().toLowerCase() != expectedValue) { return false; }
+          } else if (key == 'text') {
+            if (!data.label.toLowerCase().contains(expectedValue) &&
+                !(element.widget is Text && (element.widget as Text).data?.toLowerCase() == expectedValue)) { return false; }
+          } else if (key == 'tooltip') {
+            if (!data.tooltip.toLowerCase().contains(expectedValue) &&
+                !(element.widget is Tooltip && (element.widget as Tooltip).message?.toLowerCase() == expectedValue)) { return false; }
+          } else if (key == 'semanticslabel') {
+            if (!data.label.toLowerCase().contains(expectedValue) &&
+                !data.hint.toLowerCase().contains(expectedValue)) { return false; }
+          } else if (key == 'key') {
+            if (element.widget.key.toString() != expectedValue &&
+                element.widget.key.toString() != "[<'$expectedValue'>]") { return false; }
+          }
+        }
+        return true;
       });
       break;
     default:
@@ -581,7 +639,7 @@ Finder _resolveLazyWidgetFinder(Map<String, dynamic> params) {
 }
 
 Future<void> _handleTap(WidgetTester tester, Map<String, dynamic> params) async {
-  final result = _resolveWidgetFinder(params);
+  final result = await _resolveWidgetFinderWithWait(tester, params);
   try {
     await tester.ensureVisible(result.finder);
     await tester.pumpAndSettle();
@@ -593,7 +651,7 @@ Future<void> _handleTap(WidgetTester tester, Map<String, dynamic> params) async 
 }
 
 Future<void> _handleEnterText(WidgetTester tester, Map<String, dynamic> params) async {
-  final result = _resolveWidgetFinder(params);
+  final result = await _resolveWidgetFinderWithWait(tester, params);
   final text = params['text'] as String;
   await tester.enterText(result.finder, text);
   await tester.pumpAndSettle();
@@ -622,7 +680,7 @@ Future<void> _handleEnterText(WidgetTester tester, Map<String, dynamic> params) 
 }
 
 Future<Map<String, dynamic>> _handleGetText(WidgetTester tester, Map<String, dynamic> params) async {
-  final result = _resolveWidgetFinder(params);
+  final result = await _resolveWidgetFinderWithWait(tester, params);
   final element = result.elements.first;
   final widget = element.widget;
   
@@ -690,13 +748,13 @@ Future<void> _handleDragAndDrop(WidgetTester tester, Map<String, dynamic> params
   final fromParams = params['from'] as Map<String, dynamic>?;
   if (fromParams == null) throw 'from target is required';
   
-  final fromResult = _resolveWidgetFinder(fromParams);
+  final fromResult = await _resolveWidgetFinderWithWait(tester, fromParams);
   final centerFrom = tester.getCenter(fromResult.finder);
   
   Offset offset;
   if (params['to'] != null) {
       final toParams = params['to'] as Map<String, dynamic>;
-      final toResult = _resolveWidgetFinder(toParams);
+      final toResult = await _resolveWidgetFinderWithWait(tester, toParams);
       final centerTo = tester.getCenter(toResult.finder);
       offset = centerTo - centerFrom;
   } else {
@@ -716,7 +774,7 @@ Future<void> _handleDragAndDrop(WidgetTester tester, Map<String, dynamic> params
 }
 
 Future<void> _handleScroll(WidgetTester tester, Map<String, dynamic> params) async {
-  final result = _resolveWidgetFinder(params);
+  final result = await _resolveWidgetFinderWithWait(tester, params);
   final dx = (params['dx'] as num?)?.toDouble() ?? 0.0;
   final dy = (params['dy'] as num?)?.toDouble() ?? 0.0;
   await tester.drag(result.finder, Offset(dx, dy));
@@ -724,47 +782,50 @@ Future<void> _handleScroll(WidgetTester tester, Map<String, dynamic> params) asy
 }
 
 Future<void> _handleScrollUntilVisible(WidgetTester tester, Map<String, dynamic> params) async {
-  // Use _resolveLazyWidgetFinder so we don't throw if it's not currently in the tree (lazy list)
   final targetFinder = _resolveLazyWidgetFinder(params);
-  
-  // Handle optional scrollable finder
-  Finder? scrollableFinder;
-  if (params['scrollable'] != null) {
-    // For the scrollable itself, it MUST exist.
-    final scrollableParams = params['scrollable'] as Map<String, dynamic>;
-    final scrollableResult = _resolveWidgetFinder(scrollableParams);
-    scrollableFinder = scrollableResult.finder;
-  }
-  // If null, flutter_test will find the first ancestor scrollable.
 
-  final delta = (params['dy'] as num?)?.toDouble() ?? -50.0; 
-      
-  try {
-    await tester.scrollUntilVisible(
-      targetFinder,
-      delta.abs(), 
-      scrollable: scrollableFinder,
-    );
-    await tester.pumpAndSettle();
-  } catch (e) {
-    // If it failed, check if it was due to ambiguity or already visible
-    final elements = targetFinder.evaluate().toList();
-    if (elements.length > 1) {
-       final matches = elements.map((e) => _serializeElement(e, summaryOnly: true, screenSize: Size.zero, inOverlay: false)).toList();
-       throw AmbiguousFinderException(
-         'Scroll failed due to ambiguity. Found ${elements.length} matches.',
-         matches,
-       );
-    } else if (elements.isNotEmpty) {
-       // If found (exactly 1) but scroll failed, it implies it might be outside the scrollable
-       // OR already visible and the error is confusing.
-       // Usually if visible, scrollUntilVisible succeeds.
-       // But if it's a FAB outside the scrollable, scrollUntilVisible might fail to find the scrollable context?
-       // Let's suggest tapping.
-       throw 'Scroll failed, but the widget was found in the tree (and might be already visible or outside the scrollable). Try using "tap" directly. Original error: $e';
+  Finder scrollableFinder;
+  if (params['scrollable'] != null) {
+    final scrollableParams = params['scrollable'] as Map<String, dynamic>;
+    final scrollableResult = await _resolveWidgetFinderWithWait(tester, scrollableParams);
+    final descendant = find.descendant(of: scrollableResult.finder, matching: find.byType(Scrollable));
+    if (descendant.evaluate().isNotEmpty) {
+      scrollableFinder = descendant.first;
+    } else {
+      scrollableFinder = scrollableResult.finder.first;
     }
-    rethrow;
+  } else {
+    scrollableFinder = find.byType(Scrollable).first;
   }
+
+  final dy = (params['dy'] as num?)?.toDouble() ?? -50.0;
+  final dx = (params['dx'] as num?)?.toDouble() ?? 0.0;
+  final maxScrolls = params['maxScrolls'] as int? ?? 50;
+  final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+
+  for (int i = 0; i < maxScrolls; i++) {
+    // 1. Check if the element is currently visible on screen.
+    if (targetFinder.evaluate().isNotEmpty) {
+      final renderObject = targetFinder.evaluate().first.renderObject;
+      if (renderObject != null && !renderObject.debugNeedsPaint) {
+        final json = <String, dynamic>{};
+        _detectViewportVisibility(renderObject, size, json);
+        if (json['isInViewport'] == true) {
+          return; // Success! It is truly visible to the user.
+        }
+      }
+    }
+
+    // 2. Perform custom scroll step.
+    try {
+      await tester.drag(scrollableFinder, Offset(dx, dy));
+      await tester.pumpAndSettle();
+    } catch (e) {
+      throw 'Failed to drag the scrollable widget. Original error: $e';
+    }
+  }
+
+  throw 'Widget did not become visible on-screen after $maxScrolls scrolls. It might be off-screen or totally clipped, or the scroll target is incorrect.';
 }
 
 Future<void> _handleWaitFor(WidgetTester tester, Map<String, dynamic> params) async {
@@ -781,7 +842,7 @@ Future<void> _handleWaitFor(WidgetTester tester, Map<String, dynamic> params) as
 
 Future<Map<String, dynamic>> _handleAssertExists(WidgetTester tester, Map<String, dynamic> params) async {
   try {
-    _resolveWidgetFinder(params);
+    await _resolveWidgetFinderWithWait(tester, params);
     return {'success': true};
   } catch (e) {
     return {'success': false, 'error': e.toString()};
@@ -801,7 +862,7 @@ Future<Map<String, dynamic>> _handleAssertTextEquals(WidgetTester tester, Map<St
   final expectedText = params['expectedText'] as String?;
   if (expectedText == null) throw 'expectedText is required';
   
-  final result = _resolveWidgetFinder(params);
+  final result = await _resolveWidgetFinderWithWait(tester, params);
   final element = result.elements.first;
   final widget = element.widget;
   
@@ -845,7 +906,7 @@ Future<Map<String, dynamic>> _handleAssertState(WidgetTester tester, Map<String,
   final expectedValue = params['expectedValue'];
   if (stateKey == null || expectedValue == null) throw 'stateKey and expectedValue are required';
 
-  final result = _resolveWidgetFinder(params);
+  final result = await _resolveWidgetFinderWithWait(tester, params);
   final widget = result.elements.first.widget;
   
   Object? actualValue;
@@ -854,7 +915,6 @@ Future<Map<String, dynamic>> _handleAssertState(WidgetTester tester, Map<String,
   } else if (widget is Switch) {
     if (stateKey == 'value') actualValue = widget.value;
   } else if (widget is Radio) {
-    // ignore: deprecated_member_use
     if (stateKey == 'groupValue') actualValue = widget.groupValue;
     if (stateKey == 'value') actualValue = widget.value;
   } else if (widget is Slider) {
@@ -915,7 +975,7 @@ Map<String, dynamic> _handleInterceptNetwork(Map<String, dynamic> params) {
   return {'success': true};
 }
 
-Future<Map<String, dynamic>> _handleExploreScreen(WidgetTester tester) async {
+Future<Map<String, dynamic>> _handleExploreScreen(WidgetTester tester, Map<String, dynamic> params) async {
   // Ensure semantics are enabled
   final semanticsHandle = tester.binding.ensureSemantics();
   
@@ -923,7 +983,6 @@ Future<Map<String, dynamic>> _handleExploreScreen(WidgetTester tester) async {
   SemanticsNode? root;
   for (int i = 0; i < kMaxWebSocketRetries; i++) {
     await tester.pump(kPumpSettlingInterval);
-    // ignore: deprecated_member_use
     root = tester.binding.pipelineOwner.semanticsOwner?.rootSemanticsNode;
     if (root != null) break;
   }
@@ -1124,7 +1183,6 @@ Future<Map<String, dynamic>> _handleGetAccessibilityTree(WidgetTester tester, Ma
   SemanticsNode? root;
   for (int i = 0; i < kMaxWebSocketRetries; i++) {
     await tester.pump(kPumpSettlingInterval);
-    // ignore: deprecated_member_use
     root = tester.binding.pipelineOwner.semanticsOwner?.rootSemanticsNode;
     if (root != null) break;
   }
@@ -1147,14 +1205,19 @@ Map<String, dynamic> _serializeSemanticsNode(SemanticsNode node, {required bool 
   };
 
   if (includeRect) {
-    json['rect'] = {
-      'left': node.rect.left,
-      'top': node.rect.top,
-      'width': node.rect.width,
-      'height': node.rect.height,
-    };
-    if (node.transform != null) {
-      json['transform'] = node.transform!.toString();
+    try {
+      json['rect'] = {
+        'left': node.rect.left,
+        'top': node.rect.top,
+        'width': node.rect.width,
+        'height': node.rect.height,
+      };
+      if (node.transform != null) {
+        json['transform'] = node.transform!.toString();
+      }
+    } catch (e) {
+      // If we can't get transform (e.g., detached), it's not visible
+      json['error'] = e.toString();
     }
   }
 
@@ -1316,7 +1379,7 @@ bool _shouldKeep(Map<String, dynamic> json) {
   final hasValue = json.containsKey('value'); 
   final hasOnPressed = json.containsKey('onPressed'); 
   
-  if (hasKey || hasData || hasMessage || hasValue || hasOnPressed) return true;
+  if (hasKey || hasData || hasMessage || hasValue || hasOnPressed) { return true; }
   
   const flattenWidgets = {
     'Container', 'Padding', 'Center', 'SizedBox', 'Align', 'Expanded', 'Flexible', 
@@ -1329,7 +1392,7 @@ bool _shouldKeep(Map<String, dynamic> json) {
     'GestureDetector', 'InkWell', 
   };
   
-  if (flattenWidgets.contains(type)) return false;
+  if (flattenWidgets.contains(type)) { return false; }
   
   return true;
 }
@@ -1358,7 +1421,7 @@ Future<Map<String, dynamic>> _handleScreenshot(WidgetTester tester) async {
 // ─── Long Press ──────────────────────────────────────────────────────────────
 
 Future<void> _handleLongPress(WidgetTester tester, Map<String, dynamic> params) async {
-  final result = _resolveWidgetFinder(params);
+  final result = await _resolveWidgetFinderWithWait(tester, params);
   try {
     await tester.ensureVisible(result.finder);
     await tester.pumpAndSettle();
@@ -1372,7 +1435,7 @@ Future<void> _handleLongPress(WidgetTester tester, Map<String, dynamic> params) 
 // ─── Double Tap ──────────────────────────────────────────────────────────────
 
 Future<void> _handleDoubleTap(WidgetTester tester, Map<String, dynamic> params) async {
-  final result = _resolveWidgetFinder(params);
+  final result = await _resolveWidgetFinderWithWait(tester, params);
   try {
     await tester.ensureVisible(result.finder);
     await tester.pumpAndSettle();
@@ -1388,7 +1451,7 @@ Future<void> _handleDoubleTap(WidgetTester tester, Map<String, dynamic> params) 
 // ─── Swipe (Directional) ─────────────────────────────────────────────────────
 
 Future<void> _handleSwipe(WidgetTester tester, Map<String, dynamic> params) async {
-  final result = _resolveWidgetFinder(params);
+  final result = await _resolveWidgetFinderWithWait(tester, params);
   final direction = params['direction'] as String? ?? 'up';
   final distance = (params['distance'] as num?)?.toDouble() ?? 300.0;
 
@@ -1519,7 +1582,7 @@ Future<void> _handlePressKey(WidgetTester tester, Map<String, dynamic> params) a
 
 Future<Map<String, dynamic>> _handleScreenshotElement(WidgetTester tester, Map<String, dynamic> params) async {
   try {
-    final result = _resolveWidgetFinder(params);
+    final result = await _resolveWidgetFinderWithWait(tester, params);
     final element = result.elements.first;
     final renderObject = element.renderObject;
 
@@ -1554,4 +1617,34 @@ Future<Map<String, dynamic>> _handleScreenshotElement(WidgetTester tester, Map<S
   } catch (e) {
     return {'error': e.toString()};
   }
+}
+
+Future<Map<String, dynamic>> _handleAssertVisible(WidgetTester tester, Map<String, dynamic> params) async {
+  final result = await _resolveWidgetFinderWithWait(tester, params);
+  await tester.pumpAndSettle();
+  final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+  final json = <String, dynamic>{};
+  final renderObject = result.elements.first.renderObject;
+  if (renderObject == null) {
+    throw 'Assertion failed: Widget has no RenderObject.';
+  }
+  _detectViewportVisibility(renderObject, size, json);
+  if (json['isInViewport'] != true) {
+    throw 'Assertion failed: Widget is highly likely off-screen or totally clipped. Screen size: $size, Data: $json';
+  }
+  return {'success': true};
+}
+
+Future<Map<String, dynamic>> _handleAssertEnabled(WidgetTester tester, Map<String, dynamic> params) async {
+  final expected = params['expected'] as bool;
+  final result = await _resolveWidgetFinderWithWait(tester, params);
+  final semantics = result.elements.first.renderObject?.debugSemantics;
+  if (semantics == null) {
+    throw 'Assertion failed: Widget has no semantics.';
+  }
+  final isEnabled = semantics.getSemanticsData().hasFlag(SemanticsFlag.isEnabled);
+  if (isEnabled != expected) {
+    throw 'Assertion failed: Expected isEnabled=$expected, but was $isEnabled';
+  }
+  return {'success': true};
 }

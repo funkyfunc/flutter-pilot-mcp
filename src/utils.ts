@@ -7,6 +7,19 @@ export function parseTarget(target: string): FinderPayload {
 		return { finderType: "byKey", key: trimmedTarget.substring(1) };
 	}
 
+	const pairs = [...trimmedTarget.matchAll(/([a-zA-Z]+)\s*=\s*(["'])(.*?)\2/g)];
+	if (pairs.length > 1) {
+		const conditions: Record<string, string> = {};
+		for (const match of pairs) {
+			const key = match[1];
+			const value = match[3];
+			if (key && value !== undefined) {
+				conditions[key] = value.replace(/\\n/g, "\n");
+			}
+		}
+		return { finderType: "byCompound", conditions };
+	}
+
 	const eqIndex = trimmedTarget.indexOf("=");
 	if (eqIndex > 0) {
 		const prefix = trimmedTarget.substring(0, eqIndex).trim();

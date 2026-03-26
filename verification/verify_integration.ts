@@ -130,6 +130,106 @@ async function runTests(): Promise<void> {
 		}
 		console.log("✅ explore_screen emits suggestedTarget.");
 
+		// ── Validation of Advanced Features ─────────────────────────────────────
+
+		step("Visual Assertions - assert_enabled");
+		await callTool(client, "assert_enabled", {
+			target: "#elevated_submit",
+			expected: true,
+		});
+		await callTool(client, "assert_enabled", {
+			target: "#disabled_button",
+			expected: false,
+		});
+		console.log("✅ assert_enabled works.");
+
+		step("Visual Assertions - assert_visible offscreen");
+		try {
+			await callTool(client, "assert_visible", { target: "#offscreen_target" });
+			throw new Error("assert_visible should have failed for offscreen widget");
+		} catch (e: any) {
+			if (!e.message.includes("off-screen")) {
+				throw new Error("Expected off-screen error, got: " + e.message);
+			}
+		}
+
+		// Force it back on screen using scroll_until_visible to explicitly test the nested Scrollable logic
+		// We want to scroll the content UP (meaning we drag the screen towards the top, negative dy)
+		await callTool(client, "scroll_until_visible", {
+			target: "#offscreen_target",
+			dy: -500,
+		});
+
+		// Ensure it is now visible (validating the new pumpAndSettle in assert_visible)
+		await callTool(client, "assert_visible", { target: "#offscreen_target" });
+
+		// Must scroll back up for the rest of tests
+		await callTool(client, "scroll_until_visible", {
+			target: "#welcome_text",
+			dy: 500,
+		});
+
+		console.log("✅ assert_visible and scroll_until_visible work correctly.");
+
+		step("Compound Selectors");
+		// Two widgets have text="Submit". If we tap by text=Submit, it might fail with AmbiguousFinderException.
+		try {
+			await callTool(client, "tap", { target: 'text="Submit"' });
+			throw new Error("Should have thrown ambiguous exception");
+		} catch (e: any) {
+			if (!e.message.includes("Too many elements")) throw e;
+		}
+		// Now use compound selector
+		await callTool(client, "tap", {
+			target: 'type="ElevatedButton" text="Submit"',
+		});
+		console.log("✅ Compound selectors successfully disambiguated elements.");
+
+		step("Implicit Waits");
+		await callTool(client, "tap", { target: "#delayed_show_button" });
+		// Taps the delayed button which takes 2 seconds to appear. We use timeout_ms: 3000 to wait inline!
+		await callTool(client, "tap", {
+			target: "#delayed_show_button",
+		});
+		await callTool(client, "tap", {
+			timeout_ms: 3000,
+			target: "#delayed_widget",
+		});
+		console.log(
+			"✅ Implicit waits (timeout_ms) successfully handled delayed widget.",
+		);
+
+		// Must scroll back up to the absolute top for the text fields before testing explore filter
+		await callTool(client, "scroll_until_visible", {
+			target: "#welcome_text",
+			dy: 500,
+		});
+
+		step("Explore Screen Filters");
+		const filterResult = await callTool(client, "explore_screen", {
+			filter: ["isTextField"],
+		});
+		const filterData = JSON.parse(extractText(filterResult)) as {
+			elements?: any[];
+		};
+		if (filterData.elements?.length !== 2) {
+			console.log(JSON.stringify(filterData.elements, null, 2));
+			throw new Error(
+				`Expected exactly 2 TextFields, got ${filterData.elements?.length || 0}`,
+			);
+		}
+		const withinResult = await callTool(client, "explore_screen", {
+			within: "#home_scroll_view",
+		});
+		const withinData = JSON.parse(extractText(withinResult));
+		if (
+			!withinData.interactive_elements_count ||
+			withinData.interactive_elements_count < 5
+		) {
+			throw new Error("Within filter failed to explore subtree.");
+		}
+		console.log("✅ explore_screen filter and within arguments work.");
+
 		// ── Go Back Overlay (Bottom Sheet) ────────────────────────────────────
 		step("go_back (overlay dismissal)");
 		// tap handler calls ensureVisible() which scrolls the button into view

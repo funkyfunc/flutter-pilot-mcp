@@ -39,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showDismissable = true;
   bool _animationVisible = true;
   int _counter = 0;
+  bool _showDelayedWidget = false;
 
   @override
   void initState() {
@@ -177,6 +178,40 @@ class _HomeScreenState extends State<HomeScreen> {
                 duration: const Duration(milliseconds: 400),
                 child: const Text('Animated Text', key: Key('animated_text')),
               ),
+              ElevatedButton(
+                key: const Key('elevated_submit'),
+                onPressed: () {},
+                child: const Text('Submit'),
+              ),
+              TextButton(
+                key: const Key('text_submit'),
+                onPressed: () {},
+                child: const Text('Submit'),
+              ),
+              const ElevatedButton(
+                key: Key('disabled_button'),
+                onPressed: null,
+                child: Text('Disabled Button'),
+              ),
+              ElevatedButton(
+                key: const Key('delayed_show_button'),
+                onPressed: () {
+                  Future.delayed(const Duration(seconds: 2), () {
+                    if (mounted) {
+                      setState(() => _showDelayedWidget = true);
+                    }
+                  });
+                },
+                child: const Text('Show Delayed'),
+              ),
+              if (_showDelayedWidget)
+                ElevatedButton(
+                  key: const Key('delayed_widget'),
+                  onPressed: () => setState(() => _showDelayedWidget = false),
+                  child: const Text('I am delayed'),
+                ),
+              const SizedBox(height: 1200),
+              const Text('Offscreen target', key: Key('offscreen_target')),
             ],
           ),
         ),

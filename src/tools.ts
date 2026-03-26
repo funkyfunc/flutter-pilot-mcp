@@ -53,6 +53,10 @@ const TARGET_DESCRIPTION =
 
 const targetShape = {
 	target: z.string().describe(TARGET_DESCRIPTION).optional(),
+	timeout_ms: z
+		.number()
+		.optional()
+		.describe("Implicit wait timeout in milliseconds before failing"),
 };
 
 // ─── Tool Registration ──────────────────────────────────────────────────────
@@ -326,6 +330,27 @@ export function registerTools(server: McpServer) {
 		},
 		async (args) => forwardToHarness("assert_state", args),
 	);
+	server.registerTool(
+		"assert_visible",
+		{
+			description:
+				"Returns { success: true } if the target is painted and visible in the viewport.",
+			inputSchema: targetShape,
+		},
+		async (args) => forwardToHarness("assert_visible", args),
+	);
+	server.registerTool(
+		"assert_enabled",
+		{
+			description:
+				"Returns { success: true } if the target is interactively enabled.",
+			inputSchema: {
+				...targetShape,
+				expected: z.boolean().describe("Expected enabled state"),
+			},
+		},
+		async (args) => forwardToHarness("assert_enabled", args),
+	);
 
 	// Inspection
 	server.registerTool(
@@ -414,8 +439,57 @@ export function registerTools(server: McpServer) {
 	);
 	server.registerTool(
 		"explore_screen",
-		{ description: "Maps out interactive elements on the screen." },
-		async (args) => forwardToHarness("explore_screen", args),
+		{
+			description: "Maps out interactive elements on the screen.",
+			inputSchema: {
+				filter: z
+					.array(z.string())
+					.optional()
+					.describe(
+						"List of flags to require (e.g. 'isButton', 'isTextField')",
+					),
+				within: z
+					.string()
+					.optional()
+					.describe(
+						"Target string to constrain exploration to a specific subtree",
+					),
+			},
+		},
+		async (args) => {
+			const payload: Record<string, unknown> = { ...args };
+			if (typeof payload.within === "string") {
+				payload.within = parseTarget(payload.within);
+			}
+			const result = await forwardToHarness("explore_screen", payload, false);
+			if (args.filter && Array.isArray(args.filter) && args.filter.length > 0) {
+				try {
+					const textContent = result.content[0] as {
+						type: "text";
+						text: string;
+					};
+					const data = JSON.parse(textContent.text);
+					if (data.elements) {
+						data.elements = data.elements.filter((el: any) => {
+							const flags = el.flags || [];
+							const isMatch = args.filter?.some(
+								(f: string) =>
+									flags.includes(f) ||
+									(f === "isButton" &&
+										el.actions?.includes("tap") &&
+										!flags.includes("isTextField")),
+							);
+							return isMatch;
+						});
+						data.interactive_elements_count = data.elements.length;
+						textContent.text = JSON.stringify(data, null, 2);
+					}
+				} catch (e) {
+					// pass
+				}
+			}
+			return result;
+		},
 	);
 	server.registerTool(
 		"wait_for",
