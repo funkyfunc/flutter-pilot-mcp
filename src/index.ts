@@ -4,7 +4,7 @@ import { registerTools } from "./tools.js";
 
 async function main() {
 	const server = new McpServer({
-		name: "flutter-test-pilot",
+		name: "flutter-driver-mcp",
 		version: "1.0.0",
 	});
 

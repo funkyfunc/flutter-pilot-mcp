@@ -1,12 +1,12 @@
-# 🧪 Flutter Pilot
+# 🧪 Flutter Driver MCP
 
 An [MCP server](https://modelcontextprotocol.io) that lets AI agents **see, tap, type, scroll, and assert** inside live Flutter apps — no pre-written tests required.
 
-Flutter Pilot bridges your LLM (Claude, Gemini, etc.) to a running Flutter application via `integration_test` + WebSocket, giving the agent full interactive control of the UI.
+Flutter Driver MCP bridges your LLM (Claude, Gemini, etc.) to a running Flutter application via `integration_test` + WebSocket, giving the agent full interactive control of the UI.
 
 ---
 
-## 💡 Why Flutter Pilot?
+## 💡 Why Flutter Driver MCP?
 
 **Zero-config injection.** No changes to your app's source code. The harness is auto-injected at launch time — just point at a project path and go.
 
@@ -68,8 +68,8 @@ When a widget isn't found, the harness scans the tree and returns **"Did you mea
 ## 📦 Installation
 
 ```bash
-git clone https://github.com/funkyfunc/flutter-pilot-mcp.git
-cd flutter-pilot-mcp
+git clone https://github.com/funkyfunc/flutter-driver-mcp.git
+cd flutter-driver-mcp
 npm install
 npm run build
 ```
@@ -90,9 +90,9 @@ npm run build
 ```json
 {
   "mcpServers": {
-    "flutter-test-pilot": {
+    "flutter-driver-mcp": {
       "command": "node",
-      "args": ["/absolute/path/to/flutter-pilot-mcp/dist/src/index.js"]
+      "args": ["/absolute/path/to/flutter-driver-mcp/dist/src/index.js"]
     }
   }
 }
@@ -102,9 +102,9 @@ npm run build
 ```json
 {
   "mcpServers": {
-    "flutter-test-pilot": {
+    "flutter-driver-mcp": {
       "command": "node",
-      "args": ["/absolute/path/to/flutter-pilot-mcp/dist/src/index.js"]
+      "args": ["/absolute/path/to/flutter-driver-mcp/dist/src/index.js"]
     }
   }
 }
@@ -194,9 +194,9 @@ Once your MCP client is connected, ask the agent to:
 
 ## 🤝 Using with the Official Dart/Flutter MCP Server
 
-Flutter Pilot is **complementary** to the [official Dart/Flutter MCP server](https://github.com/dart-lang/ai). While there is some overlap in app interaction (like widget tree inspection), they serve distinct roles in a developer's workflow:
+Flutter Driver MCP is **complementary** to the [official Dart/Flutter MCP server](https://github.com/dart-lang/ai). While there is some overlap in app interaction (like widget tree inspection), they serve distinct roles in a developer's workflow:
 
-| Feature | Official Dart MCP | Flutter Pilot |
+| Feature | Official Dart MCP | Flutter Driver MCP |
 |---|---|---|
 | **Primary Focus** | IDE productivity, code analysis & linting | **Live AI-Driven E2E Testing** |
 | **Connectivity** | Dart Tooling Daemon (DTD) | WebSocket to **Injected Harness** |
@@ -205,7 +205,7 @@ Flutter Pilot is **complementary** to the [official Dart/Flutter MCP server](htt
 | **Assertions** | Manual tree inspection by agent | **On-device** assertions (`assert_exists`, etc.) |
 | **Key Tools** | `dart_fix`, `analyze_files`, `run_tests`, `pub` | `tap`, `explore_screen`, `assert_*`, `intercept_network` |
 
-**Use both together:** the official server for deep code analysis, package management, and standard IDE features; use Flutter Pilot when you need the agent to **live-test** the app UI, simulate complex environment states, and verify behavior with high-level assertions.
+**Use both together:** the official server for deep code analysis, package management, and standard IDE features; use Flutter Driver MCP when you need the agent to **live-test** the app UI, simulate complex environment states, and verify behavior with high-level assertions.
 
 ### Agent Instructions (Copy & Paste)
 
@@ -228,7 +228,7 @@ Use for **code-level** work — things you'd do in an IDE:
 - Hot reload/restart via DTD (`hot_reload`, `hot_restart`)
 - Reading package source code (`read_package_uris`)
 
-### Flutter Pilot MCP Server
+### Flutter Driver MCP Server
 Use for **live UI** work — things a real user would do:
 - Launching the app on a device (`list_devices`, `start_app`)
 - Tapping, typing, scrolling, swiping, dragging (`tap`, `long_press`, `double_tap`, `enter_text`, `scroll`, `swipe`, `drag_and_drop`, `press_key`)
@@ -241,11 +241,11 @@ Use for **live UI** work — things a real user would do:
 - Executing scoped waits (`wait_for`, `wait_for_gone`)
 
 ### Key Rules
-- **Hot restart**: Use `pilot_hot_restart` if the app was started via Pilot's `start_app`.
+- **Hot restart**: Use `pilot_hot_restart` if the app was started via Driver's `start_app`.
   Use the official `hot_restart` if working through DTD. Never mix them.
 - **Optimal workflow**: Use the Official server to edit code → `pilot_hot_restart` to refresh →
-  Pilot's `explore_screen` or `assert_exists` to verify the change rendered correctly.
-- After any Pilot interaction (`tap`, `enter_text`, etc.), the harness automatically
+  Driver's `explore_screen` or `assert_exists` to verify the change rendered correctly.
+- After any Driver interaction (`tap`, `enter_text`, etc.), the harness automatically
   calls `pumpAndSettle()`. You don't need manual waits unless testing async network latency.
 ```
 

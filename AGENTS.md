@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Welcome! If you are an AI agent (or a human new to the codebase) looking to contribute to `flutter-pilot-mcp`, this guide provides the necessary architectural context, conventions, and workflows you need to be effective.
+Welcome! If you are an AI agent (or a human new to the codebase) looking to contribute to `flutter-driver-mcp`, this guide provides the necessary architectural context, conventions, and workflows you need to be effective.
 
 ## 🏗️ Architecture Deep Dive
 
@@ -18,9 +18,6 @@ The system is fundamentally composed of two halves communicating over a local We
 2. **The Dart Harness (`src/harness.dart` & `src/harness.ts`)**
    - A generic `integration_test` script injected into the target Flutter application.
    - Listens to the WebSocket and translates JSON-RPC commands into Flutter `WidgetTester` operations (`tap`, `scroll`, `find.byKey`, `assert_exists`, etc.).
-
-> [!IMPORTANT]
-> To maintain the long-term health of this project, please document any significant new architecture decisions (ADRs) in [./invisible/ADR.md](file:///Users/dino/Development/flutter-pilot-mcp/.invisible/ADR.md).
 
 ### The Injection Mechanism (`start_app`)
 When the `start_app` tool is invoked, the following magic happens to seamlessly control the app:
