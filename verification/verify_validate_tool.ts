@@ -65,7 +65,7 @@ async function cleanup(): Promise<void> {
 async function runTest(): Promise<void> {
 	await setupDummyProject();
 
-	const serverJsPath = path.join(__dirname, "../dist/src/index.js");
+	const serverJsPath = path.join(__dirname, "../dist/index.js");
 	console.log(`Starting MCP server at ${serverJsPath}`);
 
 	const server = spawn("node", [serverJsPath], {

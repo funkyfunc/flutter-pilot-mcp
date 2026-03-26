@@ -63,7 +63,9 @@ export function jsonResponse(value: unknown, pretty = false): ToolResponse {
 	const isError =
 		typeof value === "object" &&
 		value !== null &&
-		("error" in value || (value as any).success === false);
+		("error" in value ||
+			("success" in value &&
+				(value as { success: unknown }).success === false));
 	return {
 		content: [{ type: "text" as const, text }],
 		isError: isError ? true : undefined,
