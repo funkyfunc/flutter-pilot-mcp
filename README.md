@@ -68,11 +68,11 @@ When a widget isn't found, the harness scans the tree and returns **"Did you mea
 
 ## 📦 Installation
 
+You can run the server directly via `npx` in your MCP configuration without installing anything globally.
+
+If you instead wish to install it globally:
 ```bash
-git clone https://github.com/funkyfunc/flutter-driver-mcp.git
-cd flutter-driver-mcp
-npm install
-npm run build
+npm install -g flutter-driver-mcp
 ```
 
 ### Prerequisites
@@ -87,13 +87,15 @@ npm run build
 
 ### Add to your MCP client config
 
+Use `npx -y flutter-driver-mcp` to run the server.
+
 **Claude Desktop** (`claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
     "flutter-driver-mcp": {
-      "command": "node",
-      "args": ["/absolute/path/to/flutter-driver-mcp/dist/src/index.js"]
+      "command": "npx",
+      "args": ["-y", "flutter-driver-mcp"]
     }
   }
 }
@@ -104,8 +106,8 @@ npm run build
 {
   "mcpServers": {
     "flutter-driver-mcp": {
-      "command": "node",
-      "args": ["/absolute/path/to/flutter-driver-mcp/dist/src/index.js"]
+      "command": "npx",
+      "args": ["-y", "flutter-driver-mcp"]
     }
   }
 }
