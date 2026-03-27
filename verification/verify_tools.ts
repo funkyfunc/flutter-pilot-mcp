@@ -34,6 +34,18 @@ function testParseTarget(): boolean {
 			expected: { finderType: "byTooltip", tooltip: "Back" },
 		},
 		{ input: "Submit", expected: { finderType: "byText", text: "Submit" } },
+		{
+			input: 'semanticsLabel="Log Food" index=0',
+			expected: {
+				finderType: "bySemanticsLabel",
+				semanticsLabel: "Log Food",
+				index: 0,
+			},
+		},
+		{
+			input: 'text="Submit" index=2',
+			expected: { finderType: "byText", text: "Submit", index: 2 },
+		},
 	];
 
 	let passed = true;

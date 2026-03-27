@@ -10,6 +10,7 @@ export let nextRpcMessageId = 1;
 export async function sendRpc(
 	method: string,
 	params: Record<string, unknown>,
+	timeoutMs: number = RPC_TIMEOUT_MS,
 ): Promise<unknown> {
 	if (!activeAppSession?.ws)
 		throw new Error("App not connected. Use start_app first.");
@@ -26,7 +27,7 @@ export async function sendRpc(
 				pendingRequests.delete(id);
 				reject(new Error(`Timeout waiting for device response to '${method}'`));
 			}
-		}, RPC_TIMEOUT_MS);
+		}, timeoutMs);
 	});
 }
 

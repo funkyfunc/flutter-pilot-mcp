@@ -252,7 +252,8 @@ export function registerTools(server: McpServer) {
 	server.registerTool(
 		"navigate_to",
 		{
-			description: "Pushes a named route using the root Navigator.",
+			description:
+				"Pushes a named route using Navigator.pushNamed. NOTE: Does NOT work with GoRouter or other custom routers — use tap() to navigate via on-screen elements instead.",
 			inputSchema: { route: z.string().describe("Named route to navigate to") },
 		},
 		async (args) => forwardToHarness("navigate_to", args),
@@ -591,9 +592,12 @@ export function registerTools(server: McpServer) {
 					args: resolved,
 				};
 			});
-			const result = await sendRpc("batch_actions", {
-				actions: resolvedActions,
-			});
+			const batchTimeoutMs = 30_000 + resolvedActions.length * 10_000;
+			const result = await sendRpc(
+				"batch_actions",
+				{ actions: resolvedActions },
+				batchTimeoutMs,
+			);
 			return jsonResponse(result);
 		},
 	);

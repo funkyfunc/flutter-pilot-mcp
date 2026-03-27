@@ -356,7 +356,7 @@ void main() {
             if (params.containsKey('direction')) {
               await _handleSwipe(tester, params);
             } else {
-              await _handleScroll(tester, params);
+              result = await _handleScroll(tester, params);
             }
             break;
           case 'scroll_until_visible':
@@ -520,10 +520,10 @@ _FinderResult _resolveWidgetFinder(Map<String, dynamic> params) {
   } 
   
   if (elements.length > 1) {
-    // For semantics labels, implicitly select the deepest match (the last element)
-    // because semantics labels propagate upward from child to parent widgets.
-    if (finderType.toLowerCase() == 'bysemanticslabel') {
-        return _FinderResult(finder.last, [elements.last]);
+    // For semantics labels and system-generated IDs, implicitly select the first/deepest match
+    // because these selectors are non-unique by nature.
+    if (finderType.toLowerCase() == 'bysemanticslabel' || finderType.toLowerCase() == 'byid') {
+        return _FinderResult(finder.first, [elements.first]);
     }
 
     final index = params['index'] as int?;
@@ -794,18 +794,22 @@ Future<void> _handleDragAndDrop(WidgetTester tester, Map<String, dynamic> params
   await tester.pumpAndSettle();
 }
 
-Future<void> _handleScroll(WidgetTester tester, Map<String, dynamic> params) async {
+Future<Map<String, dynamic>> _handleScroll(WidgetTester tester, Map<String, dynamic> params) async {
   final result = await _resolveWidgetFinderWithWait(tester, params);
 
   bool isScrollable = false;
+  ScrollPosition? scrollPosition;
   for (final element in result.elements) {
     if (element.widget is Scrollable) {
-       isScrollable = true; break;
+       isScrollable = true;
+       scrollPosition = (element.widget as Scrollable).controller?.position;
+       break;
     }
     bool foundScrollableAncestor = false;
     element.visitAncestorElements((ancestor) {
        if (ancestor.widget is Scrollable) {
           foundScrollableAncestor = true;
+          scrollPosition = (ancestor.widget as Scrollable).controller?.position;
           return false;
        }
        return true;
@@ -819,10 +823,19 @@ Future<void> _handleScroll(WidgetTester tester, Map<String, dynamic> params) asy
      throw StateError('Target widget is not scrollable and is not inside a scrollable container.');
   }
 
+  final positionBefore = scrollPosition?.pixels;
   final dx = (params['dx'] as num?)?.toDouble() ?? 0.0;
   final dy = (params['dy'] as num?)?.toDouble() ?? 0.0;
   await tester.drag(result.finder, Offset(dx, dy));
   await tester.pumpAndSettle();
+  final positionAfter = scrollPosition?.pixels;
+
+  return {
+    'status': 'success',
+    'scrolled': positionBefore != positionAfter,
+    if (positionBefore != null) 'position_before': positionBefore,
+    if (positionAfter != null) 'position_after': positionAfter,
+  };
 }
 
 Future<void> _handleScrollUntilVisible(WidgetTester tester, Map<String, dynamic> params) async {
@@ -1106,7 +1119,7 @@ Future<Map<String, dynamic>> _handleBatchActions(
           if (args.containsKey('direction')) {
             await _handleSwipe(tester, args);
           } else {
-            await _handleScroll(tester, args);
+            result = await _handleScroll(tester, args);
           }
           break;
         case 'assert':

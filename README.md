@@ -158,7 +158,7 @@ Once your MCP client is connected, ask the agent to:
 
 | Tool | Description |
 |---|---|
-| `navigate_to` | Pushes a named route via `Navigator.pushNamed`. |
+| `navigate_to` | Pushes a named route via `Navigator.pushNamed`. **Does NOT work with GoRouter or other custom routers** — use `tap()` to navigate via on-screen elements instead. |
 | `go_back` | Pops the current route or dismisses modal overlays (bottom sheets, dialogs). Falls back to Escape key for overlays that aren't Navigator routes. |
 | `get_current_route` | Returns the name of the currently active route — lets the agent know where it is. |
 | `simulate_background` | Sends the app to background and brings it back after a duration. |

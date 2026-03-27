@@ -11,14 +11,15 @@ export const SCREENSHOT_DIR = "flutter_pilot_screenshots";
 
 // ─── Widget Finder Types ─────────────────────────────────────────────────────
 
-export type FinderPayload =
+export type FinderPayload = (
 	| { finderType: "byKey"; key: string }
 	| { finderType: "byText"; text: string }
 	| { finderType: "byType"; type: string }
 	| { finderType: "byTooltip"; tooltip: string }
 	| { finderType: "byId"; id: string }
 	| { finderType: "bySemanticsLabel"; semanticsLabel: string }
-	| { finderType: "byCompound"; conditions: Record<string, string> };
+	| { finderType: "byCompound"; conditions: Record<string, string> }
+) & { index?: number };
 
 // ─── JSON-RPC Protocol ──────────────────────────────────────────────────────
 

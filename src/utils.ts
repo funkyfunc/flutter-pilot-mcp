@@ -1,57 +1,95 @@
 import type { FinderPayload, ToolResponse } from "./types.js";
 
 export function parseTarget(target: string): FinderPayload {
-	const trimmedTarget = target.trim();
+	let trimmedTarget = target.trim();
+
+	// Extract index=N suffix before parsing (emitted by explore_screen for disambiguation)
+	let index: number | undefined;
+	const indexMatch = trimmedTarget.match(/\s+index=(\d+)$/);
+	if (
+		indexMatch &&
+		indexMatch[1] !== undefined &&
+		indexMatch.index !== undefined
+	) {
+		index = Number.parseInt(indexMatch[1], 10);
+		trimmedTarget = trimmedTarget.substring(0, indexMatch.index).trim();
+	}
+
+	let result: FinderPayload;
 
 	if (trimmedTarget.startsWith("#")) {
-		return { finderType: "byKey", key: trimmedTarget.substring(1) };
-	}
+		result = { finderType: "byKey", key: trimmedTarget.substring(1) };
+	} else {
+		const pairs = [
+			...trimmedTarget.matchAll(/([a-zA-Z]+)\s*=\s*(["'])(.*?)\2/g),
+		];
+		if (pairs.length > 1) {
+			const conditions: Record<string, string> = {};
+			for (const match of pairs) {
+				const key = match[1];
+				const value = match[3];
+				if (key && value !== undefined) {
+					conditions[key] = value.replace(/\\n/g, "\n");
+				}
+			}
+			result = { finderType: "byCompound", conditions };
+		} else {
+			const eqIndex = trimmedTarget.indexOf("=");
+			if (eqIndex > 0) {
+				const prefix = trimmedTarget.substring(0, eqIndex).trim();
+				const value = trimmedTarget
+					.substring(eqIndex + 1)
+					.trim()
+					.replace(/^['"`]|['"`]$/g, "")
+					.replace(/\\n/g, "\n");
 
-	const pairs = [...trimmedTarget.matchAll(/([a-zA-Z]+)\s*=\s*(["'])(.*?)\2/g)];
-	if (pairs.length > 1) {
-		const conditions: Record<string, string> = {};
-		for (const match of pairs) {
-			const key = match[1];
-			const value = match[3];
-			if (key && value !== undefined) {
-				conditions[key] = value.replace(/\\n/g, "\n");
+				switch (prefix) {
+					case "text":
+						result = { finderType: "byText", text: value };
+						break;
+					case "type":
+						result = { finderType: "byType", type: value };
+						break;
+					case "tooltip":
+						result = { finderType: "byTooltip", tooltip: value };
+						break;
+					case "id":
+						if (/^\d+$/.test(value)) {
+							result = { finderType: "byId", id: value };
+						} else {
+							result = { finderType: "byKey", key: value };
+						}
+						break;
+					case "semanticsLabel":
+						result = {
+							finderType: "bySemanticsLabel",
+							semanticsLabel: value,
+						};
+						break;
+					default:
+						result = {
+							finderType: "byText",
+							text: trimmedTarget
+								.replace(/^['"`]|['"`]$/g, "")
+								.replace(/\\n/g, "\n"),
+						};
+				}
+			} else {
+				// Fallback to text matching
+				result = {
+					finderType: "byText",
+					text: trimmedTarget
+						.replace(/^['"`]|['"`]$/g, "")
+						.replace(/\\n/g, "\n"),
+				};
 			}
 		}
-		return { finderType: "byCompound", conditions };
 	}
 
-	const eqIndex = trimmedTarget.indexOf("=");
-	if (eqIndex > 0) {
-		const prefix = trimmedTarget.substring(0, eqIndex).trim();
-		const value = trimmedTarget
-			.substring(eqIndex + 1)
-			.trim()
-			.replace(/^['"`]|['"`]$/g, "")
-			.replace(/\\n/g, "\n");
-
-		switch (prefix) {
-			case "text":
-				return { finderType: "byText", text: value };
-			case "type":
-				return { finderType: "byType", type: value };
-			case "tooltip":
-				return { finderType: "byTooltip", tooltip: value };
-			case "id":
-				if (/^\d+$/.test(value)) {
-					return { finderType: "byId", id: value };
-				} else {
-					return { finderType: "byKey", key: value };
-				}
-			case "semanticsLabel":
-				return { finderType: "bySemanticsLabel", semanticsLabel: value };
-		}
+	if (index !== undefined) {
+		result.index = index;
 	}
-
-	// Fallback to text matching
-	return {
-		finderType: "byText",
-		text: trimmedTarget.replace(/^['"`]|['"`]$/g, "").replace(/\\n/g, "\n"),
-	};
+	return result;
 }
 
 /** Safely extract a message from an unknown caught value. */
