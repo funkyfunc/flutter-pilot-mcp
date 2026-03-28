@@ -1,7 +1,7 @@
 {
 	"name": "flutter-driver-mcp",
 	"version": "1.0.4",
-	"description": "An MCP server that lets AI agents drive Flutter apps — tap, type, scroll, assert, and screenshot live UIs via integration_test.",
+	"description": "An MCP server that lets AI agents drive Flutter apps — tap, type, scroll, assert, and screenshot live UIs via WebSocket.",
 	"author": "funkyfunc",
 	"license": "MIT",
 	"repository": {
@@ -24,11 +24,10 @@
 		"lint:fix": "biome check --write .",
 		"format": "biome format . --write",
 		"typecheck": "tsc --noEmit",
-		"validate": "npm run lint:fix && npm run typecheck && npm run format && npm run build && npm run verify-harness && npm run verify-tools && npm run verify-validate",
+		"validate": "npm run lint:fix && npm run typecheck && npm run format && npm run build && npm run verify-harness && npm run verify-tools",
 		"verify-harness": "sh scripts/verify_harness.sh",
 		"verify-tools": "tsx verification/verify_tools.ts",
 		"verify-integration": "tsx verification/verify_integration.ts",
-		"verify-validate": "tsx verification/verify_validate_tool.ts",
 		"prepublishOnly": "npm run validate"
 	},
 	"keywords": [

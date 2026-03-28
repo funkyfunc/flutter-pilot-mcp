@@ -611,30 +611,7 @@ async function runTests(): Promise<void> {
 			target: "#pref_counter",
 			expected: `Counter: ${expectedCount}`,
 		});
-
-		step("wipe_app_data (execution)");
-		const wipeResult = await callTool(client, "wipe_app_data");
-		console.log("Wipe result:", extractText(wipeResult));
-
-		step("pilot_hot_restart (validate wipe)");
-		await callTool(client, "pilot_hot_restart");
-		await new Promise((r) => setTimeout(r, 2000));
-
-		// Note from developer notes: SharedPreferences on macOS uses NSUserDefaults,
-		// which might NOT be cleared by deleting app directories.
-		// If this fails, we will capture the error but not abort the entire test if we're on macOS.
-		try {
-			await callTool(client, "assert", {
-				check: "text_equals",
-				target: "#pref_counter",
-				expected: "Counter: 0",
-			});
-			console.log("✅ State wiped successfully.");
-		} catch (_e) {
-			console.error(
-				"⚠️ State wiping verification failed! (This is expected on macOS where SharedPreferences uses NSUserDefaults instead of local files)",
-			);
-		}
+		console.log("✅ State persists across hot restarts.");
 
 		// ── Shutdown ────────────────────────────────────────────────────────────
 		step("stop_app");

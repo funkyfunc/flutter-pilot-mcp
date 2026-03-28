@@ -5,12 +5,9 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
-import 'package:web_socket_channel/io.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 
 
 // INJECT_IMPORT
@@ -262,9 +259,26 @@ class _FinderResult {
   _FinderResult(this.finder, this.elements);
 }
 
+/// Minimal integration-test binding for the MCP harness.
+/// Replaces IntegrationTestWidgetsFlutterBinding without requiring
+/// the integration_test package as a dependency in the target project.
+class _McpTestBinding extends LiveTestWidgetsFlutterBinding {
+  @override
+  bool get overrideHttpClient => false;
+
+  @override
+  bool get registerTestTextInput => false;
+
+  @override
+  Timeout get defaultTestTimeout => Timeout.none;
+
+  @override
+  void reportExceptionNoticed(FlutterErrorDetails exception) {}
+}
+
 void main() {
   HttpOverrides.global = _mcpHttpOverrides;
-  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = _McpTestBinding();
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   testWidgets('MCP Pilot Harness', (WidgetTester tester) async {
@@ -276,38 +290,50 @@ void main() {
     // Enable semantics globally so bySemanticsLabel finders always work
     tester.binding.ensureSemantics();
 
-    final wsUrl = const String.fromEnvironment('WS_URL', defaultValue: 'ws://localhost:8080');
-    debugPrint('MCP: Connecting to $wsUrl');
-    
-    // The Node.js server starts the WebSocket server asynchronously in parallel with launching Flutter.
-    // We retry connection 5 times to ensure we do not fail if the Flutter app boots faster than the Node WS server binds to the port.
-    IOWebSocketChannel? channel;
-    for (int i = 0; i < kMaxWebSocketRetries; i++) {
-      try {
-        channel = IOWebSocketChannel.connect(Uri.parse(wsUrl));
-        await channel.ready;
+    final wsPort = int.parse(const String.fromEnvironment('WS_PORT', defaultValue: '8080'));
+    debugPrint('MCP: Starting WebSocket server on port $wsPort');
+
+    // The harness acts as the WebSocket SERVER so it only needs the
+    // network.server entitlement, which is already in every default
+    // Flutter project (used by DevTools/VM Service). This eliminates
+    // the need for users to add network.client to their entitlements.
+    late HttpServer server;
+    try {
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, wsPort);
+    } catch (e) {
+      debugPrint('MCP: Failed to bind WebSocket server on port $wsPort: $e');
+      return;
+    }
+    debugPrint('MCP: WebSocket server ready, waiting for Node.js to connect...');
+
+    // Accept the first incoming WebSocket connection from the Node.js MCP server
+    WebSocket? ws;
+    await for (final request in server) {
+      if (WebSocketTransformer.isUpgradeRequest(request)) {
+        ws = await WebSocketTransformer.upgrade(request);
         break;
-      } catch (e) {
-        debugPrint('MCP: Connection failed, retrying in 1s... $e');
-        await Future.delayed(const Duration(seconds: 1));
+      } else {
+        request.response.statusCode = HttpStatus.forbidden;
+        request.response.close();
       }
     }
 
-    if (channel == null) {
-      debugPrint('MCP: Could not connect to host.');
+    if (ws == null) {
+      debugPrint('MCP: No WebSocket connection received.');
+      await server.close();
       return;
     }
 
-    debugPrint('MCP: Connected.');
+    debugPrint('MCP: Node.js connected.');
     
     // Notify host we are ready
-    channel.sink.add(jsonEncode({
+    ws.add(jsonEncode({
       'jsonrpc': '2.0',
       'method': 'app.started',
       'params': {},
     }));
 
-    await for (final message in channel.stream) {
+    await for (final message in ws) {
       debugPrint('MCP: Received $message');
       final map = jsonDecode(message as String) as Map<String, dynamic>;
       final id = map['id'];
@@ -337,9 +363,7 @@ void main() {
           case 'enter_text':
             await _handleEnterText(tester, params);
             break;
-          case 'wipe_app_data':
-            result = await _handleWipeAppData();
-            break;
+
           case 'drag_and_drop':
              await _handleDragAndDrop(tester, params);
              break;
@@ -423,7 +447,7 @@ void main() {
             result = await _handleExploreScreen(tester, params);
             break;
           case 'batch_actions':
-            result = await _handleBatchActions(tester, params, channel);
+            result = await _handleBatchActions(tester, params, ws);
             break;
           case 'wait_for_animation':
             await _handleWaitForAnimation(tester, params);
@@ -431,14 +455,14 @@ void main() {
           default:
             throw 'Unknown method: $method';
         }
-        channel.sink.add(jsonEncode({
+        ws.add(jsonEncode({
           'jsonrpc': '2.0',
           'id': id,
           'result': result ?? {'status': 'success'},
         }));
       } catch (e, stack) {
         debugPrint('MCP: Error: $e');
-        channel.sink.add(jsonEncode({
+        ws.add(jsonEncode({
           'jsonrpc': '2.0',
           'id': id,
           'error': {
@@ -449,6 +473,9 @@ void main() {
         }));
       }
     }
+
+    await ws.close();
+    await server.close();
   });
 }
 
@@ -742,38 +769,7 @@ Future<Map<String, dynamic>> _handleGetText(WidgetTester tester, Map<String, dyn
   return {'text': actualText ?? ''};
 }
 
-Future<Map<String, dynamic>> _handleWipeAppData() async {
-  int deletedCount = 0;
-  final clearedDirs = <String>[];
 
-  Future<void> clearDir(Directory dir) async {
-    if (await dir.exists()) {
-      clearedDirs.add(dir.path);
-      final entities = dir.listSync();
-      for (final entity in entities) {
-        try {
-          if (entity is File) {
-             await entity.delete();
-             deletedCount++;
-          } else if (entity is Directory) {
-             await entity.delete(recursive: true);
-             deletedCount++;
-          }
-        } catch (_) {}
-      }
-    }
-  }
-
-  try { await clearDir(await getApplicationDocumentsDirectory()); } catch (_) {}
-  try { await clearDir(await getApplicationSupportDirectory());   } catch (_) {}
-  try { await clearDir(await getTemporaryDirectory());            } catch (_) {}
-
-  return {
-    'success': true,
-    'deleted_files': deletedCount,
-    'directories_cleared': clearedDirs,
-  };
-}
 
 Future<void> _handleDragAndDrop(WidgetTester tester, Map<String, dynamic> params) async {
   final fromParams = params['from'] as Map<String, dynamic>?;

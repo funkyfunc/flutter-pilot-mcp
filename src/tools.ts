@@ -11,7 +11,6 @@ import {
 	handleStopApp,
 } from "./handlers/lifecycle.js";
 import { handleScreenshot } from "./handlers/screenshot.js";
-import { handleValidateProject } from "./handlers/validation.js";
 import { sendRpc } from "./infra/rpc.js";
 import { recentDaemonLogs } from "./session.js";
 import { jsonResponse, parseTarget, textResponse } from "./utils.js";
@@ -182,18 +181,6 @@ export function registerTools(server: McpServer) {
 				payload.to = parseTarget(payload.to);
 			}
 			const result = await sendRpc("drag_and_drop", payload);
-			return jsonResponse(result);
-		},
-	);
-
-	server.registerTool(
-		"wipe_app_data",
-		{
-			description:
-				"Wipes app data (clears app documents, support, and temporary directories).",
-		},
-		async () => {
-			const result = await sendRpc("wipe_app_data", {});
 			return jsonResponse(result);
 		},
 	);
@@ -536,23 +523,6 @@ export function registerTools(server: McpServer) {
 			const count = args.lines ?? 50;
 			return textResponse(recentDaemonLogs.slice(-count).join("\\n"));
 		},
-	);
-
-	server.registerTool(
-		"validate_project",
-		{
-			description: "Checks and optionally fixes project prerequisites.",
-			inputSchema: {
-				project_path: z
-					.string()
-					.describe("Absolute path to the Flutter project root"),
-				auto_fix: z
-					.boolean()
-					.optional()
-					.describe("Whether to automatically apply fixes"),
-			},
-		},
-		handleValidateProject,
 	);
 
 	// ── Composite Actions ─────────────────────────────────────────────────────

@@ -16,15 +16,16 @@ The system is fundamentally composed of two halves communicating over a local We
    - Forwards most commands as JSON-RPC payloads over a WebSocket to the Dart harness.
 
 2. **The Dart Harness (`src/harness.dart` & `src/harness.ts`)**
-   - A generic `integration_test` script injected into the target Flutter application.
-   - Listens to the WebSocket and translates JSON-RPC commands into Flutter `WidgetTester` operations (`tap`, `scroll`, `find.byKey`, `assert`, etc.).
+   - A zero-config test script injected into the target Flutter application. Requires no external pub dependencies — only `dart:*` core libraries and `package:flutter_test` (already in every Flutter project).
+   - Starts a WebSocket server inside the app that the Node server connects to. Translates JSON-RPC commands into Flutter `WidgetTester` operations (`tap`, `scroll`, `find.byKey`, `assert`, etc.).
 
 ### The Injection Mechanism (`start_app`)
 When the `start_app` tool is invoked, the following magic happens to seamlessly control the app:
-- The Node server spawns a WebSocket server on a random free port.
+- The Node server picks a random free port.
 - It dynamically reads `harness.dart`, injects the target app's `main.dart` import, and writes it to `integration_test/mcp_harness.dart` in the target project.
-- It runs `flutter run --machine --target integration_test/mcp_harness.dart --dart-define WS_URL=ws://localhost:<port>`.
-- It parses the stdout to capture the `appId` and `observatoryUri` to manage the process later.
+- It runs `flutter run --machine --target integration_test/mcp_harness.dart --dart-define WS_PORT=<port>`.
+- The Dart harness starts a WebSocket server on that port. The Node server connects to it (with retries) and communication begins.
+- On hot restart, the harness rebinds the WS server and Node auto-reconnects.
 
 ## 🛠️ How to Add a New Tool
 
@@ -38,7 +39,7 @@ To add a new capability (e.g., `long_press`), follow this strict checklist:
      delete payload.target;
      ```
    - Use `await sendRpc("long_press", payload)` to ask the Dart harness to do the work.
-3. **Handle the JSON-RPC Command (`src/harness.dart`)**: In the `main` method's `channel.stream` listener, add a `case 'long_press':` block to the `switch (method)`. Route it to a new handler like `_handleLongPress(tester, params)`.
+3. **Handle the JSON-RPC Command (`src/harness.dart`)**: In the `main` method's `ws` stream listener, add a `case 'long_press':` block to the `switch (method)`. Route it to a new handler like `_handleLongPress(tester, params)`.
 4. **Implement the WidgetTester Logic (`src/harness.dart`)**: Create the `Future<void> _handleLongPress(...)` method. 
    - First, resolve the target: `final result = _createFinder(params);`
    - Use `tester` to perform the action: `await tester.longPress(result.finder);`

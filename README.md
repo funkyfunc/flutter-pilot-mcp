@@ -2,7 +2,7 @@
 
 An [MCP server](https://modelcontextprotocol.io) that lets AI agents **see, tap, type, scroll, and assert** inside live Flutter apps — no pre-written tests required.
 
-Flutter Driver MCP bridges your LLM (Claude, Gemini, etc.) to a running Flutter application via `integration_test` + WebSocket, giving the agent full interactive control of the UI.
+Flutter Driver MCP bridges your LLM (Claude, Gemini, etc.) to a running Flutter application via Flutter's test framework + WebSocket, giving the agent full interactive control of the UI.
 
 ---
 
@@ -28,7 +28,7 @@ Flutter Driver MCP bridges your LLM (Claude, Gemini, etc.) to a running Flutter 
 | **Assertions** | `assert` |
 | **Navigation** | `navigate_to` · `go_back` · `get_current_route` |
 | **Environment** | `simulate_background` · `set_network_status` · `intercept_network` |
-| **Utilities** | `validate_project` · `read_logs` · `wipe_app_data` · `batch_actions` · `wait_for_animation` |
+| **Utilities** | `read_logs` · `batch_actions` · `wait_for_animation` |
 
 ### Unified Selectors
 
@@ -52,17 +52,19 @@ When a widget isn't found, the harness scans the tree and returns **"Did you mea
 
 ```
 ┌──────────────┐    JSON-RPC/stdio    ┌──────────────────┐   WebSocket   ┌──────────────────┐
-│  MCP Client  │ ◄──────────────────► │  Node.js Server  │ ◄───────────► │  Dart Harness    │
+│  MCP Client  │ ◄──────────────────► │  Node.js Server  │ ──connects──► │  Dart Harness    │
 │  (LLM Agent) │                      │  (index.ts)      │               │  (harness.dart)  │
 └──────────────┘                      └──────────────────┘               │  inside Flutter  │
-                                                                         │  integration_test│
+                                                                         │  flutter_test    │
                                                                          └──────────────────┘
 ```
 
 1. The **Node.js MCP server** receives tool calls from any MCP-compatible client.
 2. On `start_app`, it injects a Dart harness into the project's `integration_test/` directory and launches `flutter run --machine`.
-3. The harness connects back to the server over WebSocket and awaits JSON-RPC commands.
+3. The harness starts a WebSocket server inside the app. The Node server connects to it and sends JSON-RPC commands.
 4. All interactions (tap, scroll, assert, screenshot, etc.) execute inside the real Flutter test framework with full access to the widget tree.
+
+> **Zero external dependencies.** The harness only imports `dart:*` core libraries and `package:flutter_test` (already in every Flutter project). No changes to your `pubspec.yaml`, no entitlement edits, no setup steps.
 
 ---
 
@@ -79,7 +81,7 @@ npm install -g flutter-driver-mcp
 
 - **Node.js** ≥ 18
 - **Flutter SDK** on your `PATH`
-- A Flutter project with `integration_test` and `web_socket_channel` dependencies (use `validate_project` with `auto_fix: true` to add them automatically)
+- Any Flutter project — no additional dependencies or setup required
 
 ---
 
@@ -105,13 +107,12 @@ Add the following to your MCP client configuration:
 
 Once your MCP client is connected, ask the agent to:
 
-1. **Validate** the project: `validate_project({ project_path: "/path/to/app", auto_fix: true })`
-2. **Launch** the app: `start_app({ project_path: "/path/to/app", device_id: "macos" })`
-3. **Explore** the UI: `explore_screen({})`
-4. **Interact**: `tap({ target: "text=\"Login\"" })`
-5. **Assert**: `assert_exists({ target: "#home_screen" })`
-6. **Screenshot**: `take_screenshot({ type: "app" })`
-7. **Stop**: `stop_app({})`
+1. **Launch** the app: `start_app({ project_path: "/path/to/app", device_id: "macos" })`
+2. **Explore** the UI: `explore_screen({})`
+3. **Interact**: `tap({ target: "text=\"Login\"" })`
+4. **Assert**: `assert({ check: "exists", target: "#home_screen" })`
+5. **Screenshot**: `screenshot({ type: "app" })`
+6. **Stop**: `stop_app({})`
 
 ---
 
@@ -169,9 +170,7 @@ Once your MCP client is connected, ask the agent to:
 
 | Tool | Description |
 |---|---|
-| `validate_project` | Checks for required dependencies and platform entitlements. Use `auto_fix: true` to resolve automatically. |
 | `read_logs` | Returns the last N lines from the app's stdout/stderr. |
-| `wipe_app_data` | Wipes device application state (documents, support, and temporary directories). |
 
 ---
 

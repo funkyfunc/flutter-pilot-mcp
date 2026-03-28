@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import net from "node:net";
 import path from "node:path";
 import { execa, type Subprocess } from "execa";
 
@@ -27,6 +28,25 @@ export async function readPackageName(
 	} catch {
 		return undefined;
 	}
+}
+
+// ─── Port Allocation ────────────────────────────────────────────────────────
+
+/** Get a free port by briefly binding to port 0, capturing the OS-assigned port. */
+export function getFreePort(): Promise<number> {
+	return new Promise<number>((resolve, reject) => {
+		const srv = net.createServer();
+		srv.listen(0, () => {
+			const addr = srv.address();
+			if (typeof addr === "object" && addr !== null) {
+				const port = addr.port;
+				srv.close(() => resolve(port));
+			} else {
+				srv.close(() => reject(new Error("Could not determine free port")));
+			}
+		});
+		srv.on("error", reject);
+	});
 }
 
 // ─── Flutter Daemon Helpers ─────────────────────────────────────────────────
@@ -91,7 +111,7 @@ export function spawnFlutterDaemon(
 		"--target",
 		"integration_test/mcp_harness.dart",
 		"--dart-define",
-		`WS_URL=ws://localhost:${port}`,
+		`WS_PORT=${port}`,
 		...(deviceId ? ["-d", deviceId] : []),
 	];
 

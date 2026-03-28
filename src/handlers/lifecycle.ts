@@ -4,12 +4,13 @@ import path from "node:path";
 import { execa } from "execa";
 import {
 	attachDaemonStreams,
+	getFreePort,
 	injectHarnessFile,
 	spawnFlutterDaemon,
 	waitForAppConnection,
 } from "../infra/flutter-daemon.js";
 import { writeDaemonCommand } from "../infra/rpc.js";
-import { ensureWsServer } from "../infra/ws-server.js";
+import { connectToHarness } from "../infra/ws-client.js";
 import {
 	activeAppSession,
 	recentDaemonLogs,
@@ -32,7 +33,7 @@ export async function handleStartApp(args: {
 
 	recentDaemonLogs.length = 0;
 
-	const port = await ensureWsServer();
+	const port = await getFreePort();
 	const packageName = await injectHarnessFile(projectPath);
 	const flutterProcess = spawnFlutterDaemon(projectPath, port, deviceId);
 
@@ -46,6 +47,13 @@ export async function handleStartApp(args: {
 	});
 
 	attachDaemonStreams(flutterProcess);
+
+	// Start connecting to the harness WebSocket server in parallel.
+	// The Dart harness starts an HttpServer on the given port, and we
+	// retry until it accepts our connection. Once connected, the harness
+	// sends an `app.started` notification which resolves the wait below.
+	connectToHarness(port);
+
 	await waitForAppConnection(flutterProcess);
 
 	return textResponse(
@@ -98,7 +106,26 @@ export async function handlePilotHotRestart() {
 	if (!s.appId) throw new Error("App ID not available. Cannot restart.");
 	writeDaemonCommand("app.restart", { appId: s.appId, fullRestart: true });
 	console.error("Sent hot restart command.");
-	return textResponse("Hot restart command sent.");
+
+	// After hot restart, the Dart harness restarts and creates a new WS
+	// server on the same port. The ws-client auto-reconnects, but we must
+	// wait for that reconnection before returning control to the caller.
+	const maxWaitMs = 30_000;
+	const pollIntervalMs = 250;
+	let waited = 0;
+	while (!s.ws && waited < maxWaitMs) {
+		await new Promise((r) => setTimeout(r, pollIntervalMs));
+		waited += pollIntervalMs;
+	}
+
+	if (!s.ws) {
+		throw new Error(
+			"WebSocket did not reconnect after hot restart within timeout.",
+		);
+	}
+
+	console.error(`Hot restart reconnected after ${waited}ms.`);
+	return textResponse("Hot restart completed and reconnected.");
 }
 
 export async function handleListDevices() {

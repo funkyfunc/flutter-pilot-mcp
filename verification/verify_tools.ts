@@ -77,7 +77,6 @@ const EXPECTED_TOOLS = [
 	"press_key",
 	"get_text",
 	"drag_and_drop",
-	"wipe_app_data",
 	"get_widget_tree",
 	"get_accessibility_tree",
 	"explore_screen",
@@ -90,7 +89,6 @@ const EXPECTED_TOOLS = [
 	"simulate_background",
 	"set_network_status",
 	"read_logs",
-	"validate_project",
 	"batch_actions",
 	"wait_for_animation",
 ];
@@ -130,6 +128,8 @@ async function main(): Promise<void> {
 		"assert_state",
 		"assert_visible",
 		"assert_enabled",
+		"wipe_app_data",
+		"validate_project",
 	];
 	for (const removed of REMOVED_TOOLS) {
 		if (toolNames.has(removed)) {
