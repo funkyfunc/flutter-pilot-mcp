@@ -204,9 +204,10 @@ async function runTests(): Promise<void> {
 				target: "#offscreen_target",
 			});
 			throw new Error("assert visible should have failed for offscreen widget");
-		} catch (e: any) {
-			if (!e.message.includes("off-screen")) {
-				throw new Error("Expected off-screen error, got: " + e.message);
+		} catch (e: unknown) {
+			const err = e as Error;
+			if (!err.message.includes("off-screen")) {
+				throw new Error(`Expected off-screen error, got: ${err.message}`);
 			}
 		}
 
@@ -254,8 +255,9 @@ async function runTests(): Promise<void> {
 		try {
 			await callTool(client, "tap", { target: 'text="Submit"' });
 			throw new Error("Should have thrown ambiguous exception");
-		} catch (e: any) {
-			if (!e.message.includes("Too many elements")) throw e;
+		} catch (e: unknown) {
+			const err = e as Error;
+			if (!err.message.includes("Too many elements")) throw err;
 		}
 		// Now use compound selector
 		await callTool(client, "tap", {
@@ -288,7 +290,7 @@ async function runTests(): Promise<void> {
 			filter: ["isTextField"],
 		});
 		const filterData = JSON.parse(extractText(filterResult)) as {
-			elements?: any[];
+			elements?: Record<string, unknown>[];
 		};
 		if (filterData.elements?.length !== 2) {
 			console.log(JSON.stringify(filterData.elements, null, 2));

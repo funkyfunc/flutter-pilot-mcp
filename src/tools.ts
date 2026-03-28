@@ -433,17 +433,19 @@ export function registerTools(server: McpServer) {
 					};
 					const data = JSON.parse(textContent.text);
 					if (data.elements) {
-						data.elements = data.elements.filter((el: any) => {
-							const flags = el.flags || [];
-							const isMatch = args.filter?.some(
-								(f: string) =>
-									flags.includes(f) ||
-									(f === "isButton" &&
-										el.actions?.includes("tap") &&
-										!flags.includes("isTextField")),
-							);
-							return isMatch;
-						});
+						data.elements = data.elements.filter(
+							(el: { flags?: string[]; actions?: string[] }) => {
+								const flags = el.flags || [];
+								const isMatch = args.filter?.some(
+									(f: string) =>
+										flags.includes(f) ||
+										(f === "isButton" &&
+											el.actions?.includes("tap") &&
+											!flags.includes("isTextField")),
+								);
+								return isMatch;
+							},
+						);
 						data.interactive_elements_count = data.elements.length;
 						textContent.text = JSON.stringify(data, null, 2);
 					}
