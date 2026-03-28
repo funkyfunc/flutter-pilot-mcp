@@ -2,6 +2,46 @@
 
 Welcome! If you are an AI agent (or a human new to the codebase) looking to contribute to `flutter-driver-mcp`, this guide provides the necessary architectural context, conventions, and workflows you need to be effective.
 
+## 🧭 Design Philosophy
+
+These six principles define the soul of the project. Every feature, error message, and API choice should reinforce them. If a change conflicts with any of these, rethink the approach.
+
+### 1. Agent-First, Not Human-First
+
+This is **not** a testing framework that happens to have an MCP wrapper. It is purpose-built for LLM agents. Every design decision should be evaluated through the lens of: *"Does this make the agent more effective?"* — not "Does this look nice in a terminal?" Human developers benefit as a side effect, but the agent is always the primary user.
+
+### 2. Zero-Friction Entry
+
+A user should go from "I have a Flutter project" to "an agent is controlling it" in one tool call. No `pubspec.yaml` edits, no entitlement files, no configuration steps, no `validate_project` pre-flight. The harness imports only `dart:*` and `package:flutter_test` — both already in every Flutter project. If you're about to add an external dependency to the harness, **stop and find another way.**
+
+### 3. Errors That Coach
+
+A blind error like `"Widget not found"` costs the agent a retry loop — burning tokens, time, and user patience. Every error in this project should answer three questions: **What went wrong? Why? What should the agent try instead?** Examples of this in practice:
+- `"Target is not scrollable and is not inside a scrollable container. Use tap() instead."`
+- `"App uses a custom router like GoRouter. Please use the tap() tool to navigate on-screen elements instead."`
+- `"Too many elements found. Consider using a more specific finder, or pass an 'index' parameter."`
+- `"Did you mean key: [<submit_btn>]?"` (fuzzy match on failed finder)
+
+When adding new handlers, **always throw errors that suggest the next action.** Never throw raw exceptions without context.
+
+### 4. Token Economy
+
+LLM context windows are expensive. Every byte we send back matters. Design outputs to be information-dense and noise-free:
+- Strip Dart generics (`Provider<User>` → `Provider`) because they're noise to an agent.
+- Omit coordinate data by default — agents work with semantics, not pixels.
+- Return semantic diffs on `tap` (what labels appeared/disappeared) so the agent can verify state changes without a follow-up screenshot.
+- Provide `suggestedTarget` in `explore_screen` so the agent can copy-paste a selector instead of constructing one from raw tree data.
+
+When designing a new tool's response, ask: *"What's the minimum the agent needs to decide what to do next?"*
+
+### 5. Semantic Over Positional
+
+We don't tap at coordinates. We tap widgets by key, text, tooltip, or semantics label. This makes agent interactions resilient to layout changes, screen sizes, and platform differences. If you're ever tempted to add a "tap at x,y" feature, consider whether there's a semantic alternative first.
+
+### 6. Fewer Tools, Smarter Parameters
+
+Instead of `tap`, `long_press`, `double_tap` as three separate tools, we have one `tap` tool with a `gesture` parameter. Instead of `assert_exists`, `assert_not_exists`, `assert_text_equals` as separate tools, we have one `assert` tool with a `check` parameter. This keeps the tool list short enough to fit in an LLM's system prompt without overwhelming it. When adding a new capability, **first ask if it can be a parameter on an existing tool.** Only create a new tool when the capability is genuinely distinct.
+
 ## 🏗️ Architecture Deep Dive
 
 > [!CAUTION]
@@ -63,7 +103,7 @@ Instead of forcing the LLM to write verbose JSON like `{ "finderType": "byKey", 
 This string is parsed by `parseTarget()` in `src/index.ts` *before* the JSON-RPC request is sent to Dart. By the time it reaches `src/harness.dart`, it is a flat map with `finderType` and the specific property (`key`, `text`, etc.).
 
 ### Suggestive Errors
-If a `_createFinder()` call fails to find a widget in `src/harness.dart`, it doesn't just throw a blind error. It iterates through all available widgets and performs fuzzy matching to return a "Did you mean..." suggestion (e.g., if you searched for `#submit`, it might suggest `Did you mean key: [<submit_btn>]?`). This is crucial for reducing LLM retry loops. When writing new logic, ALWAYS use `_createFinder()` or `_createLazyFinder()` rather than calling `find...` directly to inherit this behavior.
+If a `_resolveWidgetFinder()` call fails to find a widget in `src/harness.dart`, it doesn't just throw a blind error. It iterates through all available widgets and performs fuzzy matching to return a "Did you mean..." suggestion (e.g., if you searched for `#submit`, it might suggest `Did you mean key: [<submit_btn>]?`). This is crucial for reducing LLM retry loops (see [Errors That Coach](#3-errors-that-coach)). When writing new logic, ALWAYS use `_resolveWidgetFinder()` or `_resolveLazyWidgetFinder()` rather than calling `find...` directly to inherit this behavior.
 
 ### ⚡ Performance & Token Optimization
 To minimize LLM latency and context usage, several optimizations are baked into the harness:
