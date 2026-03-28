@@ -71,17 +71,15 @@ When the `start_app` tool is invoked, the following magic happens to seamlessly 
 
 To add a new capability (e.g., `long_press`), follow this strict checklist:
 
-1. **Define the Tool (`src/index.ts`)**: Look for `server.setRequestHandler(ListToolsRequestSchema, ...)` and add your new tool definition to the `tools` array. Describe its `inputSchema` thoroughly.
-2. **Handle the Tool Request (`src/index.ts`)**: Inside `server.setRequestHandler(CallToolRequestSchema, ...)`, add an `if (name === "long_press")` block. 
-   - *Note on Selectors*: If your tool accepts a `target` string (the Unified Selector format), remember to parse it before sending: 
+1. **Define the Tool (`src/tools.ts`)**: Add a `server.registerTool("long_press", { description, inputSchema }, handler)` call inside `registerTools()`. Describe its `inputSchema` thoroughly.
+   - *Note on Selectors*: If your tool accepts a `target` string (the Unified Selector format), use `resolveTargetArgs(args)` to parse it before sending: 
      ```typescript
-     Object.assign(payload, parseTarget(payload.target));
-     delete payload.target;
+     const payload = resolveTargetArgs(args);
      ```
    - Use `await sendRpc("long_press", payload)` to ask the Dart harness to do the work.
-3. **Handle the JSON-RPC Command (`src/harness.dart`)**: In the `main` method's `ws` stream listener, add a `case 'long_press':` block to the `switch (method)`. Route it to a new handler like `_handleLongPress(tester, params)`.
-4. **Implement the WidgetTester Logic (`src/harness.dart`)**: Create the `Future<void> _handleLongPress(...)` method. 
-   - First, resolve the target: `final result = _createFinder(params);`
+2. **Handle the JSON-RPC Command (`src/harness.dart`)**: In the `main` method's `ws` stream listener, add a `case 'long_press':` block to the `switch (method)`. Route it to a new handler like `_handleLongPress(tester, params)`.
+3. **Implement the WidgetTester Logic (`src/harness.dart`)**: Create the `Future<void> _handleLongPress(...)` method. 
+   - First, resolve the target: `final result = _resolveWidgetFinder(params);`
    - Use `tester` to perform the action: `await tester.longPress(result.finder);`
    - Wait for the UI to settle: `await tester.pumpAndSettle();`
 

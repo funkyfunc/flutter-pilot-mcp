@@ -10,7 +10,7 @@ Flutter Driver MCP bridges your LLM (Claude, Gemini, etc.) to a running Flutter 
 
 **Zero-config injection.** No changes to your app's source code. The harness is auto-injected at launch time — just point at a project path and go.
 
-**Focused, LLM-optimized toolset.** ~28 purpose-built tools instead of hundreds. Every tool description fits comfortably in an LLM context window without drowning the model in irrelevant options.
+**Focused, LLM-optimized toolset.** 26 purpose-built tools instead of hundreds. Every tool description fits comfortably in an LLM context window without drowning the model in irrelevant options.
 
 **Suggestive errors.** When a widget isn't found, the harness fuzzy-matches against the live widget tree and returns **"Did you mean…?"** suggestions — dramatically reducing agent retry loops and wasted tokens.
 
@@ -172,6 +172,8 @@ The agent handles `start_app`, `explore_screen`, `tap`, `assert`, `screenshot`, 
 | Tool | Description |
 |---|---|
 | `read_logs` | Returns the last N lines from the app's stdout/stderr. |
+| `batch_actions` | Executes multiple actions in a single tool call (e.g. fill a form: 5× `enter_text` + `tap`). Runs sequentially with `pumpAndSettle` between each. |
+| `wait_for_animation` | Waits for all animations to finish before proceeding. |
 
 ---
 
@@ -185,8 +187,8 @@ Flutter Driver MCP is **complementary** to the [official Dart/Flutter MCP server
 | **Connectivity** | Dart Tooling Daemon (DTD) | WebSocket to **Injected Harness** |
 | **App Control** | Hot reload/restart, workspace symbols | Mocking, backgrounding, network interception |
 | **AI Discovery** | Widget Tree (standard) | **Semantics-first** (`explore_screen`) |
-| **Assertions** | Manual tree inspection by agent | **On-device** assertions (`assert_exists`, etc.) |
-| **Key Tools** | `dart_fix`, `analyze_files`, `run_tests`, `pub` | `tap`, `explore_screen`, `assert_*`, `intercept_network` |
+| **Assertions** | Manual tree inspection by agent | **On-device** assertions (`assert` with `check` parameter) |
+| **Key Tools** | `dart_fix`, `analyze_files`, `run_tests`, `pub` | `tap`, `explore_screen`, `assert`, `intercept_network` |
 
 **Use both together:** the official server for deep code analysis, package management, and standard IDE features; use Flutter Driver MCP when you need the agent to **live-test** the app UI, simulate complex environment states, and verify behavior with high-level assertions.
 
@@ -220,7 +222,6 @@ Use for **live UI** work — things a real user would do:
 - Mocking network responses (`intercept_network`)
 - Navigating (`navigate_to`, `go_back`, `get_current_route`)
 - Simulating environment (`simulate_background`, `set_network_status`)
-- Wiping app data (`wipe_app_data`)
 - Executing scoped waits (`wait_for` with `gone` flag)
 
 ### Key Rules
