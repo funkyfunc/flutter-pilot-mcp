@@ -86,7 +86,7 @@ export async function handleStopApp() {
 	if (activeAppSession) {
 		try {
 			activeAppSession.process.kill("SIGKILL");
-		} catch { }
+		} catch {}
 	}
 	activeAppSession?.ws?.close();
 
@@ -101,7 +101,7 @@ export async function handleStopApp() {
 	const tempDir = path.join(os.tmpdir(), SCREENSHOT_DIR);
 	try {
 		await fs.rm(tempDir, { recursive: true, force: true });
-	} catch { }
+	} catch {}
 
 	return textResponse("App stopped.");
 }
@@ -152,6 +152,6 @@ export async function handleListDevices() {
 
 	return textResponse(
 		`Found ${devices.length} device(s):\\n${summary}\\n\\n` +
-		"Use the device ID (e.g. 'macos', 'chrome', or a simulator UUID) with start_app.",
+			"Use the device ID (e.g. 'macos', 'chrome', or a simulator UUID) with start_app.",
 	);
 }

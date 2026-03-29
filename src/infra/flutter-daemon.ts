@@ -123,7 +123,7 @@ export function spawnFlutterDaemon(
 		cwd: projectPath,
 		stdio: ["pipe", "pipe", "pipe"],
 	});
-	flutterDaemonProcess.catch(() => { }); // Prevent unhandled rejection on kill
+	flutterDaemonProcess.catch(() => {}); // Prevent unhandled rejection on kill
 	return flutterDaemonProcess;
 }
 
