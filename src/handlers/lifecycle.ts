@@ -53,7 +53,9 @@ export async function handleStartApp(args: {
 	// The Dart harness starts an HttpServer on the given port, and we
 	// retry until it accepts our connection. Once connected, the harness
 	// sends an `app.started` notification which resolves the wait below.
-	connectToHarness(port);
+	connectToHarness(port).catch((err) => {
+		console.error(`WebSocket harness connection failed: ${err}`);
+	});
 
 	await waitForAppConnection(flutterProcess);
 

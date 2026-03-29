@@ -7,7 +7,7 @@ import {
 import type { JsonRpcResponse } from "../types.js";
 import { pendingRequests } from "./rpc.js";
 
-const MAX_CONNECT_RETRIES = 30;
+const MAX_CONNECT_RETRIES = 180;
 const RETRY_INTERVAL_MS = 1_000;
 
 /** Shared message handler wired to every WebSocket connection. */
