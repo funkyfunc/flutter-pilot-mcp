@@ -126,11 +126,36 @@ When you make changes to the source code, you must build the TypeScript code, as
 This means:
 - **`npm run validate` and `npm run build`** verify that your code compiles and passes static checks, but they do NOT test runtime behavior through the MCP server.
 - **You cannot test your local changes via MCP tool calls** unless the host application restarts the MCP server process (which reloads from `dist/`).
-- **Asking the user to restart is fine** for final verification, but you should exhaust manual testing first.
+
+### Testing with the MCP Inspector (Recommended)
+
+The easiest way to test your local changes end-to-end is with the **MCP Inspector**. It spawns a **fresh** MCP server process from your local `dist/` build, giving you a web UI to call any tool interactively:
+
+```bash
+# 1. Build your changes
+npm run build
+
+# 2. Launch the inspector (starts the server from dist/index.js)
+npx -y @modelcontextprotocol/inspector node dist/index.js
+```
+
+This opens a browser at `http://localhost:6274` where you can:
+- **Connect** to the locally-built server
+- **Browse all tools** and their schemas
+- **Call any tool** with custom parameters (e.g., `start_app` with `test_app/`)
+- **See the full JSON response** including errors
+
+This is the **preferred method** for testing because:
+- It uses your local `dist/` build, not the globally installed version
+- It tests the full MCP protocol flow (tool registration → JSON-RPC → harness → response)
+- No need to ask the user to restart anything
+- You can test Node.js server changes AND Dart harness changes together
+
+Example: to test a `start_app` change, launch the inspector, connect, select `start_app`, enter `project_path: /path/to/flutter-driver-mcp/test_app` and `device_id: macos`, then click **Run Tool**.
 
 ### Manual Testing Without the MCP Server
 
-To test changes to the Dart harness (`src/harness/harness.dart`) or launch logic without restarting the MCP server, use this workflow:
+For changes that **only** affect the Dart harness (`src/harness/harness.dart`), you can skip the MCP server entirely and test the harness in isolation:
 
 #### 1. Build and inject the harness manually
 
