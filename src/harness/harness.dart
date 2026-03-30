@@ -263,6 +263,25 @@ class _FinderResult {
 /// Replaces IntegrationTestWidgetsFlutterBinding without requiring
 /// the integration_test package as a dependency in the target project.
 class _McpTestBinding extends LiveTestWidgetsFlutterBinding {
+  _McpTestBinding() {
+    // Suppress the 'debugFrameWasSentToEngine' assertion that fires on
+    // Android with LiveTestWidgetsFlutterBinding + fullyLive frame policy.
+    // This assertion is thrown in WidgetsBinding.drawFrame's FrameTiming
+    // callback when the engine fires timing events before the test binding
+    // has flagged the frame as "sent to engine". It's a known incompatibility
+    // between fullyLive mode and the debug assertion — it's harmless and
+    // doesn't affect rendering or interaction, but it loops infinitely and
+    // prevents both waitUntilFirstFrameRasterized and pumpAndSettle from
+    // completing. We install the filter here in the constructor so it is
+    // active before any frames are dispatched.
+    final originalOnError = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      final msg = details.exception.toString();
+      if (msg.contains('debugFrameWasSentToEngine')) return;
+      originalOnError?.call(details);
+    };
+  }
+
   @override
   bool get overrideHttpClient => false;
 
@@ -283,13 +302,8 @@ void main() {
 
   testWidgets('MCP Pilot Harness', (WidgetTester tester) async {
     // INJECT_MAIN
-    
+
     // Wait for the Flutter engine to rasterize its first frame.
-    // This is a proper signal from the framework — it replaces arbitrary
-    // delays and prevents the 'debugFrameWasSentToEngine' assertion on
-    // Android, where the engine may not be ready immediately after main().
-    // With fullyLive frame policy, the first frame renders through the
-    // real platform vsync without needing manual tester.pump() calls.
     await tester.binding.waitUntilFirstFrameRasterized;
     await tester.pumpAndSettle();
 

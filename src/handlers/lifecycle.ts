@@ -3,6 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { execa } from "execa";
 import {
+	isAndroidDevice,
+	removeAndroidPortForward,
+	setupAndroidPortForward,
+} from "../infra/android.js";
+import {
 	attachDaemonStreams,
 	getFreePort,
 	injectHarnessFile,
@@ -48,6 +53,13 @@ export async function handleStartApp(args: {
 	});
 
 	attachDaemonStreams(flutterProcess);
+
+	// Android emulators run in their own network namespace — the harness
+	// binds to 127.0.0.1 inside the emulator, which is NOT reachable from
+	// the host. We use `adb forward` to bridge the port to localhost.
+	if (isAndroidDevice(deviceId)) {
+		await setupAndroidPortForward(deviceId!, port);
+	}
 
 	// Start connecting to the harness WebSocket server in parallel.
 	// The Dart harness starts an HttpServer on the given port, and we
@@ -96,6 +108,14 @@ export async function handleStopApp() {
 		const name = path.basename(activeAppSession.projectPath);
 		await execa("pkill", ["-f", `${name}.*flutter`], { reject: false });
 		await execa("pkill", ["-f", `${name}.app`], { reject: false });
+	}
+
+	// Clean up adb port forwarding for Android devices
+	if (
+		activeAppSession?.deviceId &&
+		isAndroidDevice(activeAppSession.deviceId)
+	) {
+		await removeAndroidPortForward(activeAppSession.deviceId);
 	}
 
 	setActiveAppSession(null);
