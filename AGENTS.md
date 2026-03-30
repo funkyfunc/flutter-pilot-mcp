@@ -117,3 +117,88 @@ When you make changes to the source code, you must build the TypeScript code, as
 - **Build**: Run `npm run build` to compile the TypeScript code and correctly copy `harness.dart` into the `dist/` folder.
 - **Validation**: **CRITICAL**: After making any changes, you MUST run `npm run validate` to ensure the code is formatted, type-checked, and builds correctly.
 - **Automated Tests**: The repo includes a `test_app` (a simple Flutter app). Run `npm run verify-integration` to boot it up and run assertions on all the MCP tools. If you add a new tool, consider adding a verification step in the `verification/` scripts.
+
+### ⚠️ MCP Tool Calls Use the Installed Server, NOT Your Local Build
+
+> [!IMPORTANT]
+> When you call MCP tools like `start_app`, `tap`, or `screenshot` through the MCP client (e.g. Antigravity, Claude, Cursor), those tools execute against the **globally installed or previously-started server process** — NOT your local `dist/` build. Rebuilding with `npm run build` updates the files on disk, but the running MCP server process has already loaded the old code into memory.
+
+This means:
+- **`npm run validate` and `npm run build`** verify that your code compiles and passes static checks, but they do NOT test runtime behavior through the MCP server.
+- **You cannot test your local changes via MCP tool calls** unless the host application restarts the MCP server process (which reloads from `dist/`).
+- **Asking the user to restart is fine** for final verification, but you should exhaust manual testing first.
+
+### Manual Testing Without the MCP Server
+
+To test changes to the Dart harness (`src/harness/harness.dart`) or launch logic without restarting the MCP server, use this workflow:
+
+#### 1. Build and inject the harness manually
+
+```bash
+npm run build
+
+# Inject harness into test_app (replaces the INJECT_IMPORT/INJECT_MAIN placeholders)
+cat src/harness/harness.dart \
+  | sed "s|// INJECT_IMPORT|import 'package:test_app/main.dart' as app;|" \
+  | sed "s|// INJECT_MAIN|app.main();|" \
+  > test_app/integration_test/mcp_harness.dart
+```
+
+#### 2. Run flutter directly on the target device
+
+```bash
+# macOS (simplest — no port forwarding needed)
+cd test_app && flutter run --target integration_test/mcp_harness.dart \
+  --dart-define WS_PORT=9999 -d macos
+
+# iOS Simulator (no port forwarding needed)
+cd test_app && flutter run --target integration_test/mcp_harness.dart \
+  --dart-define WS_PORT=9999 -d <SIMULATOR_UUID>
+
+# Android Emulator (REQUIRES adb port forwarding — see below)
+adb -s emulator-5554 forward tcp:9999 tcp:9999
+cd test_app && flutter run --target integration_test/mcp_harness.dart \
+  --dart-define WS_PORT=9999 -d emulator-5554
+```
+
+#### 3. Verify the harness is running
+
+Look for these lines in the output:
+```
+I/flutter: MCP: Starting WebSocket server on port 9999
+I/flutter: MCP: WebSocket server ready, waiting for Node.js to connect...
+```
+
+#### 4. Test WebSocket connectivity from the host
+
+```bash
+node -e "
+const WebSocket = require('ws');
+const ws = new WebSocket('ws://127.0.0.1:9999');
+ws.on('open', () => { console.log('Connected!'); ws.close(); process.exit(0); });
+ws.on('error', (e) => { console.log('Error:', e.message); process.exit(1); });
+setTimeout(() => { console.log('Timeout'); process.exit(1); }, 5000);
+"
+```
+
+### 🤖 Android-Specific Gotchas
+
+Android emulators have several quirks that don't affect macOS or iOS:
+
+1. **Port Forwarding is Mandatory**: The emulator runs in its own network namespace. `127.0.0.1` inside the emulator is NOT the host's loopback. You must run `adb -s <device> forward tcp:<PORT> tcp:<PORT>` before connecting. The server does this automatically via `src/infra/android.ts`, but manual testing requires you to do it yourself.
+
+2. **Zombie Processes**: When a Flutter integration test crashes or is killed mid-run on Android, the Dart VM process can persist on the emulator even after `adb uninstall`. Subsequent `flutter run` commands may hot-reload into the old zombie process (you'll see the same PID in logcat). **The fix: reboot the emulator** with `adb -s emulator-5554 reboot`, or kill the process with `adb shell am force-stop <package>`.
+
+3. **`debugFrameWasSentToEngine` Assertion**: `LiveTestWidgetsFlutterBinding` with `fullyLive` frame policy triggers a known Flutter assertion in `WidgetsBinding.drawFrame` on Android. This is suppressed by our `FlutterError.onError` filter in `_McpTestBinding`'s constructor. If you see this assertion flooding logcat, it means the filter isn't installed (e.g., the old harness code is still running — see zombie processes above).
+
+4. **Cold Gradle Builds**: First-time Android builds can take 3–5+ minutes due to Gradle dependency resolution. The activity-aware timeout in `flutter-daemon.ts` handles this by resetting the deadline whenever the daemon produces output, but manual testing with `flutter run` can feel very slow. Use `flutter clean` + `flutter pub get` only when you need a truly fresh build.
+
+### The `test_app`
+
+The `test_app/` directory contains a minimal Flutter application used for integration testing. It has:
+- A simple multi-screen UI with buttons, text fields, and scrollable lists
+- No external dependencies beyond Flutter defaults
+- Works on all platforms (macOS, iOS, Android, Chrome)
+
+Use it as the target project for manual testing. The `integration_test/mcp_harness.dart` file is auto-generated and should NOT be committed — it's created fresh by `injectHarnessFile()` (or manually via the `sed` command above).
+
